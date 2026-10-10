@@ -228,8 +228,8 @@
   var CH = {
     toys: { name: 'Toys', who: 'Resellers, wholesalers & importers', icon: '🧸', types: ['Reseller', 'Wholesaler', 'Importer', 'Distributor', 'Retailer'],
       pitch: 'we make 3D-printed flexi toys and fidget clickers that sell fast with a healthy margin for resellers. Can I share our trade catalogue?' },
-    lighting: { name: 'Lighting', who: 'Designers, architects & light shops', icon: '💡', types: ['Interior designer', 'Architect', 'Light shop', 'Design studio', 'Builder / developer'],
-      pitch: 'we make 3D-printed designer lamps — pendant, wall and table — made to order in custom colours for interior projects. Can I share our lookbook and trade terms?' },
+    lighting: { name: 'Lighting', who: 'Lamp wholesalers & distributors', icon: '💡', types: ['Lamp wholesaler', 'Lighting distributor', 'Electrical / light shop', 'Online seller', 'Interior designer / studio'],
+      pitch: 'we make 3D-printed designer lamps — pendant, table and wall — at trade prices that leave you a healthy margin. Can I share our wholesale catalogue and terms?' },
     gifting: { name: 'HoReCa & gifting', who: 'Hotels, cafés & corporates', icon: '🎁', types: ['Hotel', 'Restaurant / café', 'Corporate', 'Event planner', 'Gift shop'],
       pitch: 'we make custom 3D-printed décor, gifts and hampers for hotels, cafés and companies — with your branding. Can I share a few options?' }
   };
@@ -554,7 +554,7 @@
   function leadForm(l){
     var d = (l && l.data) || {}, ch = (l && l.channel) || myCh() || 'toys';
     openSheet('<div class="sheet-h"><div class="t">' + (l ? 'Edit lead' : 'New lead') + '</div><button class="x" data-a="close">✕</button></div>' +
-      '<label>Business name</label><input id="f-business" value="' + esc(d.business || '') + '" placeholder="e.g. Shree Toys, Studio Ochre, Hotel Alka">' +
+      '<label>Business name</label><input id="f-business" value="' + esc(d.business || '') + '" placeholder="e.g. Shree Toys, Bright Lights Traders, Hotel Alka">' +
       '<div class="grid2"><div><label>Contact person</label><input id="f-contact" value="' + esc(d.contact || '') + '"></div><div><label>Phone</label><input id="f-phone" inputmode="tel" value="' + esc(d.phone || '') + '"></div></div>' +
       '<div class="grid2"><div><label>Channel</label><select id="f-channel">' + opts(Object.keys(CH).map(function(k){ return [k, CH[k].name]; }), ch) + '</select></div><div><label>Type</label><select id="f-type">' + opts([''].concat(CH[ch].types), d.type || '') + '</select></div></div>' +
       '<div class="grid2"><div><label>Market / area</label><input id="f-market" value="' + esc(d.market || '') + '" placeholder="e.g. Sadar Bazar"></div><div><label>City</label><input id="f-city" value="' + esc(d.city || '') + '"></div></div>' +
