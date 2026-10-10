@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TT Sales">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Thread Tribe Sales</title>
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  :root{
+    --bg:#f2f4f7; --panel:#ffffff; --panel2:#f6f8fa; --line:#e1e6ec; --text:#16202c; --dim:#617183; --input:#eef1f5;
+    --accent:#1f9e93; --accent-ink:#ffffff; --accent-soft:rgba(31,158,147,0.12);
+    --amber:#c97c0e; --amber-soft:rgba(240,168,60,0.16); --red:#d0453e; --red-soft:rgba(232,97,90,0.13); --green:#2f8f40; --green-soft:rgba(126,208,138,0.18);
+    --shadow:0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0d1117; --panel:#151c26; --panel2:#111821; --line:#243244; --text:#e3eaf2; --dim:#8a9bb0; --input:#0b1118;
+      --accent:#4fd1c5; --accent-ink:#06201d; --accent-soft:rgba(79,209,197,0.14);
+      --amber:#f0a83c; --red:#ef6b63; --green:#7ed08a; --shadow:none; }
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body{ background:var(--bg); }
+  body{ color:var(--text); font-family:'Space Grotesk', system-ui, -apple-system, sans-serif; font-size:15px; line-height:1.45; -webkit-text-size-adjust:100%;
+    padding:calc(12px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom)); min-height:100vh; }
+  .wrap{ max-width:560px; margin:0 auto; }
+  button{ font:inherit; color:inherit; }
+  .hidden{ display:none !important; }
+
+  /* header */
+  .top{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0 14px; }
+  .top-left{ min-width:0; }
+  .eyebrow{ font-size:12px; font-weight:600; color:var(--accent); letter-spacing:0.3px; }
+  .title{ font-size:22px; font-weight:700; letter-spacing:-0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sync{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim); background:var(--panel); border:1px solid var(--line); padding:6px 10px; border-radius:20px; white-space:nowrap; cursor:pointer; }
+  .sync i{ width:8px; height:8px; border-radius:50%; background:var(--dim); display:inline-block; }
+  .sync.live i{ background:var(--green); box-shadow:0 0 0 3px var(--green-soft); }
+  .sync.busy i{ background:var(--amber); }
+  .sync.off i{ background:var(--red); }
+  .prof{ position:relative; display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--text); background:var(--panel); border:1px solid var(--line); padding:6px 10px; border-radius:20px; white-space:nowrap; cursor:pointer; }
+  .prof .dot{ position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; border-radius:8px; background:var(--red); color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; padding:0 4px; }
+  .pick{ display:flex; gap:12px; align-items:center; width:100%; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:10px; cursor:pointer; color:var(--text); font:inherit; }
+  .pick.on{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+  .pick .ic{ font-size:22px; } .pick .t{ font-weight:700; } .pick .s{ font-size:13px; color:var(--dim); }
+
+  /* cards & lists */
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow); }
+  .h2{ font-size:13px; font-weight:600; color:var(--dim); margin:20px 4px 8px; display:flex; justify-content:space-between; align-items:center; }
+  .h2 .count{ background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:0 8px; font-size:12px; }
+  .muted{ color:var(--dim); font-size:13px; }
+  .row{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .row:last-child{ border-bottom:none; }
+  .row .r{ text-align:right; font-weight:600; }
+  .sw{ width:14px; height:14px; border-radius:50%; flex:none; border:1px solid rgba(127,127,127,0.35); display:inline-block; }
+  .empty{ text-align:center; color:var(--dim); padding:28px 12px; }
+  .empty b{ display:block; color:var(--text); font-size:17px; margin-bottom:4px; }
+
+  /* buttons */
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--line); background:var(--panel); border-radius:12px; padding:11px 16px; font-weight:600; font-size:14.5px; cursor:pointer; }
+  .btn:active{ transform:scale(0.98); }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn.block{ width:100%; padding:15px 16px; font-size:16px; border-radius:14px; }
+  .btn.small{ padding:8px 12px; font-size:13.5px; border-radius:10px; }
+  .btn.ghost{ background:transparent; }
+  .btn.danger{ color:var(--red); }
+  .btn[disabled]{ opacity:0.5; }
+  .link{ background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; padding:6px 0; font-size:14px; }
+  .link.dim{ color:var(--dim); font-weight:500; }
+  .btns{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+
+  /* today */
+  .hello{ font-size:15px; color:var(--dim); margin:2px 4px 12px; }
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px; }
+  .stat{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; cursor:pointer; box-shadow:var(--shadow); }
+  .stat .k{ font-size:12.5px; color:var(--dim); }
+  .stat .v{ font-size:24px; font-weight:700; letter-spacing:-0.4px; margin-top:2px; }
+  .act{ display:flex; gap:12px; align-items:flex-start; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; box-shadow:var(--shadow); }
+  .act .ic{ width:38px; height:38px; flex:none; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--accent-soft); }
+  .act.warn .ic{ background:var(--amber-soft); } .act.bad .ic{ background:var(--red-soft); } .act.good .ic{ background:var(--green-soft); }
+  .act .body{ flex:1; min-width:0; }
+  .act .t{ font-weight:600; }
+  .act .s{ font-size:13px; color:var(--dim); margin-top:1px; }
+  .act .btns{ margin-top:10px; }
+
+  /* jobs */
+  .seg{ display:flex; gap:6px; overflow-x:auto; padding:2px 0 4px; margin:0 -16px; padding-left:16px; padding-right:16px; scrollbar-width:none; }
+  .seg::-webkit-scrollbar{ display:none; }
+  .seg button{ flex:none; border:1px solid var(--line); background:var(--panel); border-radius:20px; padding:8px 14px; font-size:13.5px; font-weight:600; color:var(--dim); cursor:pointer; }
+  .seg button.on{ background:var(--text); color:var(--bg); border-color:var(--text); }
+  .seg button .n{ margin-left:6px; font-size:12px; opacity:0.75; }
+  .job{ display:flex; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; cursor:pointer; width:100%; text-align:left; box-shadow:var(--shadow); }
+  .job .body{ flex:1; min-width:0; }
+  .job .t{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .job .s{ font-size:13px; color:var(--dim); margin-top:2px; }
+  .job .chev{ color:var(--dim); font-size:20px; }
+  .chip{ display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:8px; background:var(--panel2); color:var(--dim); white-space:nowrap; }
+  .chip.late{ background:var(--red-soft); color:var(--red); } .chip.soon{ background:var(--amber-soft); color:var(--amber); } .chip.ok{ background:var(--green-soft); color:var(--green); }
+  .chip.new{ background:var(--accent-soft); color:var(--accent); }
+
+  /* stepper */
+  .steps{ display:flex; align-items:center; margin:16px 0 4px; }
+  .steps .st{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; font-size:11.5px; color:var(--dim); position:relative; }
+  .steps .st b{ width:24px; height:24px; border-radius:50%; border:2px solid var(--line); background:var(--panel); display:flex; align-items:center; justify-content:center; font-size:12px; z-index:1; }
+  .steps .st.done b{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .steps .st.now b{ border-color:var(--accent); color:var(--accent); }
+  .steps .st.now{ color:var(--text); font-weight:600; }
+  .steps .st:not(:first-child)::before{ content:''; position:absolute; top:12px; right:50%; width:100%; height:2px; background:var(--line); }
+  .steps .st.done:not(:first-child)::before, .steps .st.now:not(:first-child)::before{ background:var(--accent); }
+
+  /* forms */
+  label{ display:block; font-size:13px; color:var(--dim); margin:12px 0 6px; font-weight:500; }
+  input, textarea, select{ width:100%; background:var(--input); border:1px solid var(--line); border-radius:12px; padding:13px 14px; font:inherit; font-size:16px; color:var(--text); outline:none; }
+  input:focus, textarea:focus{ border-color:var(--accent); }
+  textarea{ min-height:84px; resize:vertical; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:0 10px; }
+  .inrow{ display:flex; gap:8px; } .inrow input{ flex:1; }
+  .hint{ font-size:12.5px; color:var(--dim); margin-top:6px; }
+  .note{ border-radius:12px; padding:12px 14px; font-size:14px; margin-top:12px; }
+  .note.info{ background:var(--accent-soft); } .note.warn{ background:var(--amber-soft); } .note.bad{ background:var(--red-soft); } .note.good{ background:var(--green-soft); }
+
+  /* money */
+  .big{ text-align:center; padding:22px 16px; }
+  .big .k{ color:var(--dim); font-size:14px; }
+  .big .v{ font-size:40px; font-weight:700; letter-spacing:-1px; margin:4px 0 2px; }
+  .pill{ font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:10px; white-space:nowrap; }
+  .pill.wait{ background:var(--amber-soft); color:var(--amber); } .pill.done{ background:var(--green-soft); color:var(--green); } .pill.no{ background:var(--red-soft); color:var(--red); } .pill.gray{ background:var(--panel2); color:var(--dim); }
+  .bar{ height:8px; background:var(--panel2); border-radius:6px; overflow:hidden; margin-top:8px; border:1px solid var(--line); }
+  .bar span{ display:block; height:100%; border-radius:6px; }
+
+  /* bottom nav */
+  .nav{ position:fixed; left:0; right:0; bottom:0; z-index:50; background:var(--panel); border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); display:grid; grid-template-columns:repeat(5, 1fr); }
+  .nav button{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0; font-size:11.5px; font-weight:600; color:var(--dim); cursor:pointer; position:relative; }
+  .nav button svg{ width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+  .nav button.on{ color:var(--accent); }
+  .nav .badge{ position:absolute; top:2px; left:calc(50% + 6px); background:var(--red); color:#fff; font-size:10.5px; min-width:17px; height:17px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 4px; }
+
+  /* sheet */
+  .scrim{ position:fixed; inset:0; background:rgba(5,8,12,0.5); z-index:80; opacity:0; transition:opacity .2s; }
+  .scrim.show{ opacity:1; }
+  .sheet{ position:fixed; left:0; right:0; bottom:0; z-index:90; background:var(--bg); border-radius:22px 22px 0 0; max-height:92vh; overflow-y:auto; padding:8px 16px calc(20px + env(safe-area-inset-bottom));
+    transform:translateY(100%); transition:transform .25s ease; max-width:600px; margin:0 auto; overscroll-behavior:contain; }
+  .sheet.show{ transform:none; }
+  .grab{ width:40px; height:5px; border-radius:3px; background:var(--line); margin:4px auto 10px; }
+  .sheet-h{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px; }
+  .sheet-h .t{ font-size:19px; font-weight:700; letter-spacing:-0.2px; }
+  .x{ background:var(--panel); border:1px solid var(--line); border-radius:50%; width:34px; height:34px; flex:none; font-size:16px; cursor:pointer; }
+  details{ margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--dim); font-size:14px; padding:6px 0; list-style:none; }
+  summary::-webkit-details-marker{ display:none; }
+  summary::after{ content:' ▾'; }
+  details[open] summary::after{ content:' ▴'; }
+  .scanbox{ position:relative; width:100%; aspect-ratio:4/3; background:#000; border-radius:14px; overflow:hidden; margin-top:10px; }
+  .scanbox video{ width:100%; height:100%; object-fit:cover; }
+  .scanbox::after{ content:''; position:absolute; left:10%; right:10%; top:40%; height:20%; border:2px solid rgba(255,255,255,0.85); border-radius:10px; }
+
+  /* sign in */
+  .signin{ max-width:420px; margin:40px auto 0; }
+  .signin h1{ font-size:26px; letter-spacing:-0.4px; margin-bottom:6px; }
+  .err{ color:var(--red); font-size:13.5px; margin-top:10px; min-height:18px; }
+
+  .wd{ display:flex; gap:6px; flex-wrap:wrap; }
+  .wdc{ display:flex; align-items:center; gap:4px; margin:0; padding:6px 10px; border:1px solid var(--line); border-radius:10px; background:var(--panel); font-size:13px; color:var(--text); }
+  .wdc input{ width:auto; }
+  .toast{ position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:var(--text); color:var(--bg); padding:11px 18px; border-radius:12px; font-size:14px; font-weight:600;
+    opacity:0; transition:all .2s; z-index:200; max-width:calc(100% - 32px); text-align:center; pointer-events:none; }
+  .toast.show{ opacity:1; transform:translateX(-50%); }
+  .ptr{ text-align:center; font-size:12.5px; color:var(--dim); height:0; overflow:hidden; transition:height .15s; }
+
+  /* sales */
+  a.btn{ color:var(--text); text-decoration:none; } a.btn.primary{ color:var(--accent-ink); }
+  .qa{ display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 6px; } .qa .btn{ flex:1; min-width:30%; padding:11px 10px; font-size:14px; }
+  .stats{ grid-template-columns:1fr 1fr; } .stat .v{ font-size:22px; } .stat .hint{ margin-top:2px; }
+  .tl{ display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); } .tl:last-child{ border-bottom:0; }
+  .tl-ic{ width:30px; height:30px; flex:none; border-radius:10px; background:var(--panel2); display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .tl-photo{ display:block; width:120px; height:120px; object-fit:cover; border-radius:10px; margin-top:6px; cursor:zoom-in; }
+  .kinds{ display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:8px; }
+  .kind{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 4px; border:1px solid var(--line); border-radius:12px; background:var(--panel); font-size:18px; cursor:pointer; }
+  .kind span{ font-size:11.5px; font-weight:600; color:var(--dim); } .kind.on{ border-color:var(--accent); background:var(--accent-soft); } .kind.on span{ color:var(--text); }
+  .mini{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:6px; } .mini span{ font-size:12px; color:var(--dim); }
+  .grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; } @media (min-width:640px){ .grid{ grid-template-columns:repeat(3, 1fr); } }
+  .pcard{ text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px; cursor:pointer; box-shadow:var(--shadow); }
+  .pcard.on{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+  .pcard .ph{ position:relative; aspect-ratio:1; border-radius:10px; background:var(--panel2); display:flex; align-items:center; justify-content:center; font-size:30px; overflow:hidden; }
+  .pcard .ph img{ width:100%; height:100%; object-fit:cover; } .pcard .tick{ position:absolute; top:6px; right:6px; background:var(--accent); color:var(--accent-ink); width:24px; height:24px; border-radius:12px; font-size:14px; display:flex; align-items:center; justify-content:center; }
+  .pcard .n{ font-weight:600; font-size:13.5px; margin-top:6px; line-height:1.25; } .pcard .p{ font-size:13px; } .pcard .w{ font-size:12px; color:var(--dim); }
+  .sharebar{ position:sticky; top:6px; z-index:5; display:flex; gap:8px; align-items:center; background:var(--panel); border:1px solid var(--accent); border-radius:14px; padding:8px 10px; margin-bottom:10px; box-shadow:var(--shadow); } .sharebar span{ flex:1; font-weight:600; }
+  .search{ margin:0; }
+  .seg{ flex-wrap:nowrap; }
+  @media (min-width:900px){ .wrap{ max-width:760px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top" id="top">
+    <div class="top-left"><div class="eyebrow" id="eyebrow">Thread Tribe Sales</div><div class="title" id="title">Welcome</div></div>
+  </div>
+  <div id="signin" class="hidden"></div>
+  <div id="screen" class="hidden"></div>
+</div>
+
+<nav class="nav hidden" id="nav">
+  <button data-tab="today"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Today</button>
+  <button data-tab="leads"><svg viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>Leads</button>
+  <button data-tab="accounts"><svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/></svg>Accounts</button>
+  <button data-tab="catalogue"><svg viewBox="0 0 24 24"><path d="M4 5c3-1 5-1 8 1 3-2 5-2 8-1v14c-3-1-5-1-8 1-3-2-5-2-8-1z"/><path d="M12 6v14"/></svg>Catalogue</button>
+  <button data-tab="team"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.5c3 0 5 1.5 5.5 4.5"/></svg>Team</button>
+</nav>
+<div class="scrim hidden" id="scrim"></div>
+<div class="sheet hidden" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheetBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  // ======================= setup =======================
+  var KEY = 'tt-sales-v1';
+  var CFG = window.TT_CONFIG || {};
+  var CLOUD_URL = CFG.supabaseUrl || 'https://aeshadnzutizlpayhtnf.supabase.co';
+  var CLOUD_KEY = CFG.supabaseKey || 'sb_publishable_tunpMMqpGPgRQreweefjTA_nBO7fXId';
+  var CH = {
+    toys: { name: 'Toys', who: 'Resellers, wholesalers & importers', icon: '🧸', types: ['Reseller', 'Wholesaler', 'Importer', 'Distributor', 'Retailer'],
+      pitch: 'we make 3D-printed flexi toys and fidget clickers that sell fast with a healthy margin for resellers. Can I share our trade catalogue?' },
+    lighting: { name: 'Lighting', who: 'Designers, architects & light shops', icon: '💡', types: ['Interior designer', 'Architect', 'Light shop', 'Design studio', 'Builder / developer'],
+      pitch: 'we make 3D-printed designer lamps — pendant, wall and table — made to order in custom colours for interior projects. Can I share our lookbook and trade terms?' },
+    gifting: { name: 'HoReCa & gifting', who: 'Hotels, cafés & corporates', icon: '🎁', types: ['Hotel', 'Restaurant / café', 'Corporate', 'Event planner', 'Gift shop'],
+      pitch: 'we make custom 3D-printed décor, gifts and hampers for hotels, cafés and companies — with your branding. Can I share a few options?' }
+  };
+  var STAGES = [['new', 'New'], ['contacted', 'Contacted'], ['meeting', 'Meeting'], ['quote', 'Quote / sample'], ['won', 'Won'], ['lost', 'Lost']];
+  var OPEN = ['new', 'contacted', 'meeting', 'quote'];
+  var SOURCES = ['Market visit', 'Referral', 'Instagram', 'IndiaMART', 'Exhibition', 'Inbound call / WhatsApp', 'Website', 'Existing client', 'Other'];
+  var KINDS = { call: ['📞', 'Call'], whatsapp: ['💬', 'WhatsApp'], visit: ['📍', 'Visit'], meeting: ['🤝', 'Meeting'], sample: ['📦', 'Sample sent'], quote: ['🧾', 'Quote sent'], note: ['📝', 'Note'], stage: ['➡️', 'Stage'] };
+  // Logging an activity moves a lead forward to at least this stage.
+  var KIND_STAGE = { call: 'contacted', whatsapp: 'contacted', visit: 'meeting', meeting: 'meeting', sample: 'quote', quote: 'quote' };
+  var LOST = ['Price too high', 'Went with a competitor', 'No need right now', 'Minimum order too high', 'No response', 'Other'];
+
+  var store = { email: '', view: 'mine', chFilter: '' };
+  var sb = null, session = null, rt = null;
+  var S = { me: null, team: [], leads: [], acts: [], pack: null, missing: false, notOnTeam: false, loaded: false, leadActs: {} };
+  var cloud = { otpEmail: '', err: '', booting: true };
+  var tab = 'today', open = null, stageSeg = 'open', leadQuery = '', acctQuery = '', catCh = '', catQuery = '', picked = {}, draftPhoto = '', draftLoc = null;
+
+  function load(){ try{ var s = JSON.parse(localStorage.getItem(KEY)); if(s) store = Object.assign(store, s); }catch(e){} }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  function esc(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;'); }
+  function num(v){ v = parseFloat(v); return isFinite(v) ? v : 0; }
+  function money(v){ v = Math.round(v || 0); return '₹' + (v >= 100000 ? (Math.round(v / 10000) / 10) + 'L' : v.toLocaleString('en-IN')); }
+  function iso(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function today(){ return iso(new Date()); }
+  function addDays(n){ var d = new Date(); d.setDate(d.getDate() + n); return iso(d); }
+  function month(){ return today().slice(0, 7); }
+  function fmtDate(s){ if(!s) return ''; var d = new Date(String(s).length > 10 ? s : s + 'T00:00:00'); return isNaN(d) ? s : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
+  function ago(ts){ var m = Math.round((Date.now() - Date.parse(ts)) / 60000); return !isFinite(m) ? '' : m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; }
+  function daysUntil(s){ if(!s) return null; return Math.round((new Date(s + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 86400000); }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function val(id){ var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+  function toast(msg){ var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('show'); }, 2600); }
+  function buzz(){ try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} }
+  function phoneLink(p){ p = String(p || '').replace(/\D/g, ''); if(p.length === 10) p = '91' + p; return p.length >= 11 ? p : ''; }
+  function stageName(k){ var s = STAGES.find(function(x){ return x[0] === k; }); return s ? s[1] : k; }
+  function chName(k){ return CH[k] ? CH[k].name : 'All channels'; }
+  function repName(email){ var r = S.team.find(function(x){ return x.email === email; }); return r ? r.name : (email === (S.me && S.me.email) ? 'You' : (email || '').split('@')[0]); }
+  function firstName(n){ return String(n || '').split(' ')[0]; }
+  function friendlyErr(err){ var m = String((err && err.message) || err || ''); if(/fetch|network|Load failed/i.test(m)) return 'No internet — try again.'; if(/policy|permission/i.test(m)) return 'You don’t have access to do that.'; return m || 'Something went wrong.'; }
+
+  // ======================= data =======================
+  async function refresh(){
+    if(!sb || !session) return;
+    var r = await sb.from('sales_reps').select('email,name,channel,active');
+    if(r.error){ S.missing = /sales_reps|does not exist|schema cache|relation/i.test(r.error.message || ''); S.loaded = true; renderAll(); return; }
+    S.missing = false;
+    S.team = (r.data || []).filter(function(x){ return x.active; });
+    var me = S.team.find(function(x){ return x.email === store.email; });
+    if(!me){
+      var ok = await sb.rpc('is_sales');
+      if(ok.data === true) me = { email: store.email, name: 'Thread Tribe', channel: '', admin: true };
+    }
+    S.me = me || null; S.notOnTeam = !me;
+    if(!me){ S.loaded = true; renderAll(); return; }
+    var since = new Date(Date.now() - 90 * 86400000).toISOString();
+    var res = await Promise.all([
+      sb.from('sales_leads').select('id,channel,stage,owner_email,data,updated_at').order('updated_at', { ascending: false }).limit(5000),
+      sb.from('sales_activities').select('id,lead_id,kind,author_email,data,created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(5000),
+      sb.from('sales_pack').select('pack,updated_at').eq('id', 'main').maybeSingle()
+    ]);
+    S.leads = res[0].data || []; S.acts = res[1].data || []; S.pack = (res[2].data && res[2].data.pack) || null;
+    S.loaded = true;
+    if(!rt){
+      try{
+        rt = sb.channel('tt-sales-' + uid())
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_leads' }, soon)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_activities' }, soon)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_pack' }, soon).subscribe();
+      }catch(e){}
+    }
+    renderAll();
+  }
+  var soonT = null;
+  function soon(){ clearTimeout(soonT); soonT = setTimeout(refresh, 600); }
+  function lead(id){ return S.leads.find(function(l){ return l.id === id; }); }
+  function myCh(){ return (S.me && S.me.channel) || ''; }
+  function inView(l){ return store.view === 'all' || !myCh() || l.channel === myCh(); }
+  function actsOf(id){ return (S.leadActs[id] || S.acts.filter(function(a){ return a.lead_id === id; })); }
+  async function loadLeadActs(id){
+    var r = await sb.from('sales_activities').select('id,lead_id,kind,author_email,data,created_at').eq('lead_id', id).order('created_at', { ascending: false }).limit(200);
+    if(!r.error){ S.leadActs[id] = r.data || []; if(open === id) renderAll(); }
+  }
+  async function saveLead(l){
+    var row = { id: l.id, channel: l.channel, stage: l.stage, owner_email: l.owner_email || null, data: l.data };
+    var r = await sb.from('sales_leads').upsert(row, { onConflict: 'id' });
+    if(r.error){ toast(friendlyErr(r.error)); return false; }
+    var i = S.leads.findIndex(function(x){ return x.id === l.id; });
+    l.updated_at = new Date().toISOString();
+    if(i >= 0) S.leads[i] = l; else S.leads.unshift(l);
+    return true;
+  }
+  async function logAct(leadId, kind, data){
+    var a = { id: uid(), lead_id: leadId, kind: kind, author_email: S.me.email, data: data || {} };
+    var r = await sb.from('sales_activities').insert(a);
+    if(r.error){ toast(friendlyErr(r.error)); return null; }
+    a.created_at = new Date().toISOString();
+    S.acts.unshift(a); if(S.leadActs[leadId]) S.leadActs[leadId].unshift(a);
+    return a;
+  }
+  async function setStage(l, to, extra){
+    var from = l.stage;
+    l.stage = to; l.data = Object.assign({}, l.data, extra || {}, { stageAt: new Date().toISOString() });
+    if(!(await saveLead(l))){ l.stage = from; return false; }
+    await logAct(l.id, 'stage', { from: from, to: to, note: (extra && (extra.lostReason || extra.wonNote)) || '' });
+    return true;
+  }
+
+  // ======================= numbers =======================
+  function targets(ch){ var t = (S.pack && S.pack.targets) || {}; return ch ? (t[ch] || {}) : t; }
+  function kpis(email, ch){
+    var m = month(), mine = function(a){ return !email || a.author_email === email; };
+    var acts = S.acts.filter(function(a){ return (a.created_at || '').slice(0, 7) === m && mine(a) && (!ch || (lead(a.lead_id) || {}).channel === ch); });
+    var leadsAdded = S.leads.filter(function(l){ return (l.data.createdAt || '').slice(0, 7) === m && (!email || l.data.createdBy === email) && (!ch || l.channel === ch); }).length;
+    var meetings = acts.filter(function(a){ return a.kind === 'visit' || a.kind === 'meeting'; }).length;
+    var won = S.leads.filter(function(l){ return l.stage === 'won' && (l.data.wonAt || '').slice(0, 7) === m && (!email || l.owner_email === email) && (!ch || l.channel === ch); });
+    var actual = ch && S.pack && S.pack.actuals && S.pack.actuals[ch] ? S.pack.actuals[ch] : null;
+    return { leads: leadsAdded, meetings: meetings, touches: acts.filter(function(a){ return a.kind !== 'stage'; }).length, won: won.length, wonValue: won.reduce(function(t, l){ return t + num(l.data.wonValue); }, 0), revenue: actual ? actual.revenueMonth : null };
+  }
+  function bar(v, target){
+    if(!target) return '<div class="hint">' + v + ' this month</div>';
+    var p = Math.min(100, Math.round(100 * v / target));
+    return '<div class="bar"><span style="width:' + p + '%;background:' + (p >= 100 ? 'var(--green)' : 'var(--accent)') + '"></span></div><div class="hint">' + v + ' of ' + target + '</div>';
+  }
+  function kpiCards(k, t){
+    var cell = function(label, v, target, fmt){ return '<div class="stat"><div class="k">' + label + '</div><div class="v">' + (fmt ? fmt(v) : v) + '</div>' + (target ? bar(fmt ? Math.round(v) : v, target).replace(/(\d+) of (\d+)/, function(_, a, b){ return (fmt ? fmt(+a) : a) + ' of ' + (fmt ? fmt(+b) : b); }) : '<div class="hint">this month</div>') + '</div>'; };
+    return '<div class="stats">' + cell('New leads', k.leads, t.leads) + cell('Meetings & visits', k.meetings, t.meetings) + cell('Won', k.won, t.won) +
+      (k.revenue != null ? cell('Channel sales', k.revenue, t.revenue, money) : cell('Won value', k.wonValue, null, money)) + '</div>';
+  }
+  function dueLeads(email){
+    return S.leads.filter(function(l){ return OPEN.indexOf(l.stage) !== -1 && (!email || l.owner_email === email) && l.data.nextAt && l.data.nextAt <= today(); })
+      .sort(function(a, b){ return (a.data.nextAt || '').localeCompare(b.data.nextAt || ''); });
+  }
+
+  // ======================= screens =======================
+  function greeting(){ var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
+  function leadRow(l){
+    var d = l.data || {}, du = daysUntil(d.nextAt);
+    var chip = OPEN.indexOf(l.stage) === -1 ? '<span class="chip ' + (l.stage === 'won' ? 'ok' : 'late') + '">' + stageName(l.stage) + '</span>' :
+      du == null ? '<span class="chip">no next step</span>' : '<span class="chip ' + (du < 0 ? 'late' : du === 0 ? 'soon' : '') + '">' + (du < 0 ? (-du) + 'd late' : du === 0 ? 'today' : fmtDate(d.nextAt)) + '</span>';
+    return '<button class="job" data-a="lead" data-id="' + esc(l.id) + '"><span class="body"><span class="t">' + esc(d.business || d.contact || 'Lead') + '</span>' +
+      '<span class="s" style="display:block">' + esc([d.contact && d.business ? d.contact : '', d.market || d.city, (CH[l.channel] || {}).icon + ' ' + stageName(l.stage)].filter(Boolean).join(' · ')) + '</span>' +
+      (d.nextStep && OPEN.indexOf(l.stage) !== -1 ? '<span class="s" style="display:block">Next: ' + esc(d.nextStep) + '</span>' : '') + '</span>' + chip + '<span class="chev">›</span></button>';
+  }
+  function todayHtml(){
+    var me = S.me, ch = myCh(), k = kpis(me.admin ? '' : me.email, ch), due = dueLeads(me.admin ? '' : me.email);
+    var html = '<div class="hello">' + greeting() + ', ' + esc(firstName(me.name)) + ' · ' + (ch ? CH[ch].icon + ' ' + CH[ch].name : 'all channels') + '</div>' + kpiCards(k, targets(ch));
+    html += '<div class="qa"><button class="btn primary" data-a="new-lead">＋ New lead</button><button class="btn" data-a="pick-lead">📍 Log a visit</button><button class="btn" data-a="tab" data-tab="catalogue">📒 Catalogue</button></div>';
+    html += '<div class="h2">Follow-ups due<span class="count">' + due.length + '</span></div>' + (due.length ? due.slice(0, 12).map(leadRow).join('') : '<div class="card empty"><b>All caught up ✓</b>Set a next follow-up on every lead and it shows here on the day.</div>');
+    var loose = S.leads.filter(function(l){ return OPEN.indexOf(l.stage) !== -1 && (me.admin || l.owner_email === me.email) && !l.data.nextAt; });
+    if(loose.length) html += '<div class="act warn" data-a="tab" data-tab="leads" style="cursor:pointer"><div class="ic">⏳</div><div class="body"><div class="t">' + loose.length + ' open lead' + (loose.length === 1 ? '' : 's') + ' with no next step</div><div class="s">Give each one a follow-up date so nothing goes cold.</div></div></div>';
+    var quiet = ((S.pack && S.pack.accounts) || []).filter(function(a){ return (!ch || a.channel === ch) && a.daysSince != null && a.daysSince >= 45; });
+    if(quiet.length) html += '<div class="act" data-a="tab" data-tab="accounts" style="cursor:pointer"><div class="ic">🔁</div><div class="body"><div class="t">' + quiet.length + ' account' + (quiet.length === 1 ? '' : 's') + ' gone quiet</div><div class="s">No order in 45+ days — a quick check-in often brings a reorder.</div></div></div>';
+    var wins = S.leads.filter(function(l){ return l.stage === 'won' && (l.data.wonAt || '') >= addDays(-7); });
+    if(wins.length) html += '<div class="h2">Team wins this week</div><div class="card">' + wins.slice(0, 6).map(function(l){ return '<div class="row"><span>🎉 ' + esc(l.data.business || 'Lead') + '<div class="hint" style="margin:0">' + esc(repName(l.owner_email)) + ' · ' + CH[l.channel].name + '</div></span><span class="r">' + (l.data.wonValue ? money(l.data.wonValue) : '') + '</span></div>'; }).join('') + '</div>';
+    return html;
+  }
+  function leadsHtml(){
+    if(open && lead(open)) return leadHtml(lead(open));
+    var q = leadQuery.toLowerCase();
+    var base = S.leads.filter(inView).filter(function(l){ return !q || JSON.stringify([l.data.business, l.data.contact, l.data.city, l.data.market, l.data.phone]).toLowerCase().indexOf(q) !== -1; });
+    var counts = {}; STAGES.forEach(function(s){ counts[s[0]] = base.filter(function(l){ return l.stage === s[0]; }).length; });
+    var shown = base.filter(function(l){ return stageSeg === 'open' ? OPEN.indexOf(l.stage) !== -1 : l.stage === stageSeg; })
+      .sort(function(a, b){ return (a.data.nextAt || '9999').localeCompare(b.data.nextAt || '9999') || (b.updated_at || '').localeCompare(a.updated_at || ''); });
+    var pipe = base.filter(function(l){ return OPEN.indexOf(l.stage) !== -1; }).reduce(function(t, l){ return t + num(l.data.potential); }, 0);
+    return viewToggle() +
+      '<div class="seg"><button data-seg="open" class="' + (stageSeg === 'open' ? 'on' : '') + '">Open<span class="n">' + OPEN.reduce(function(t, k){ return t + counts[k]; }, 0) + '</span></button>' +
+      STAGES.map(function(s){ return '<button data-seg="' + s[0] + '" class="' + (stageSeg === s[0] ? 'on' : '') + '">' + s[1] + '<span class="n">' + counts[s[0]] + '</span></button>'; }).join('') + '</div>' +
+      '<div class="inrow" style="margin:10px 0"><input id="lq" type="search" placeholder="Search name, market, phone" value="' + esc(leadQuery) + '"><button class="btn primary" data-a="new-lead">＋ Lead</button></div>' +
+      (stageSeg === 'open' && pipe ? '<div class="hint" style="margin:0 4px 8px">Open pipeline worth ~' + money(pipe) + ' a month</div>' : '') +
+      (shown.length ? shown.map(leadRow).join('') : '<div class="card empty"><b>Nothing here</b>' + (S.leads.length ? 'Try another stage or search.' : 'Add your first lead — a shop you visited, a designer you met, a hotel that called.') + '</div>');
+  }
+  function viewToggle(){
+    if(!myCh()) return '';
+    return '<div class="seg" style="margin-bottom:8px"><button data-view="mine" class="' + (store.view !== 'all' ? 'on' : '') + '">' + CH[myCh()].icon + ' My channel</button><button data-view="all" class="' + (store.view === 'all' ? 'on' : '') + '">All channels</button></div>';
+  }
+  function leadHtml(l){
+    var d = l.data || {}, si = STAGES.findIndex(function(s){ return s[0] === l.stage; }), acts = actsOf(l.id), wa = phoneLink(d.phone);
+    var html = '<button class="link" data-a="back">‹ Leads</button><div class="card"><div style="font-size:20px;font-weight:700">' + esc(d.business || d.contact || 'Lead') + '</div>' +
+      '<div class="hint" style="margin-top:2px">' + esc([d.contact && d.business ? d.contact : '', d.type, CH[l.channel] ? CH[l.channel].icon + ' ' + CH[l.channel].name : ''].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="hint">' + esc([d.market, d.city].filter(Boolean).join(', ')) + (d.source ? ' · via ' + esc(d.source) : '') + ' · owner ' + esc(repName(l.owner_email)) + '</div>' +
+      (OPEN.indexOf(l.stage) !== -1 ? '<div class="steps">' + STAGES.slice(0, 5).map(function(s, i){ return '<div class="st ' + (i < si ? 'done' : i === si ? 'now' : '') + '"><b>' + (i < si ? '✓' : i + 1) + '</b>' + s[1] + '</div>'; }).join('') + '</div>'
+        : '<div class="note ' + (l.stage === 'won' ? 'good' : 'bad') + '">' + (l.stage === 'won' ? '🎉 Won ' + fmtDate(d.wonAt) + (d.wonValue ? ' · first order ~' + money(d.wonValue) : '') + (d.clientId ? ' · set up in Studio' : ' · Thread Tribe will set them up as a client') : 'Lost ' + fmtDate(d.lostAt) + (d.lostReason ? ' · ' + esc(d.lostReason) : '')) + '</div>') +
+      '<div class="btns">' + (d.phone ? '<a class="btn small" href="tel:' + esc(String(d.phone).replace(/[^\d+]/g, '')) + '" data-a="quick-log" data-k="call" data-id="' + esc(l.id) + '">📞 Call</a>' : '') +
+        (wa ? '<button class="btn small" data-a="wa" data-id="' + esc(l.id) + '">💬 WhatsApp</button>' : '') +
+        (d.market || d.city || d.address ? '<a class="btn small" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([d.business, d.address, d.market, d.city].filter(Boolean).join(', ')) + '">🗺️ Map</a>' : '') +
+        '<button class="btn small" data-a="edit-lead" data-id="' + esc(l.id) + '">Edit</button></div></div>';
+    if(OPEN.indexOf(l.stage) !== -1){
+      var du = daysUntil(d.nextAt);
+      html += '<div class="card"><div class="row"><span><b>Next step</b><div class="hint" style="margin:0">' + (d.nextStep ? esc(d.nextStep) : 'Not set') + '</div></span><span class="r">' + (d.nextAt ? '<span class="chip ' + (du < 0 ? 'late' : du === 0 ? 'soon' : '') + '">' + fmtDate(d.nextAt) + '</span>' : '') + '</span></div>' +
+        '<div class="btns"><button class="btn primary" data-a="log" data-id="' + esc(l.id) + '">＋ Log activity</button><button class="btn small" data-a="won" data-id="' + esc(l.id) + '">🎉 Won</button><button class="btn small" data-a="lost" data-id="' + esc(l.id) + '">Lost</button></div>' +
+        '<div class="btns" style="margin-top:6px">' + STAGES.slice(0, 4).filter(function(s){ return s[0] !== l.stage; }).map(function(s){ return '<button class="link" style="margin-right:12px" data-a="stage" data-st="' + s[0] + '" data-id="' + esc(l.id) + '">→ ' + s[1] + '</button>'; }).join('') + '</div></div>';
+    } else html += '<div class="btns" style="margin:0 0 12px"><button class="btn small" data-a="reopen" data-id="' + esc(l.id) + '">Reopen</button><button class="btn small" data-a="log" data-id="' + esc(l.id) + '">＋ Log activity</button></div>';
+    var info = [['Phone', d.phone], ['Email', d.email], ['Potential', d.potential ? money(d.potential) + ' / month' : ''], ['Address', d.address]].filter(function(x){ return x[1]; });
+    if(info.length || d.notes) html += '<div class="card">' + info.map(function(x){ return '<div class="row"><span class="muted">' + x[0] + '</span><span class="r" style="font-weight:500;white-space:normal;text-align:right">' + esc(x[1]) + '</span></div>'; }).join('') + (d.notes ? '<div style="white-space:pre-wrap;margin-top:8px">' + esc(d.notes) + '</div>' : '') + '</div>';
+    html += '<div class="h2">History<span class="count">' + acts.length + '</span></div>' + (acts.length ? '<div class="card">' + acts.map(function(a){
+      var k = KINDS[a.kind] || ['•', a.kind], x = a.data || {};
+      var what = a.kind === 'stage' ? 'Moved to ' + stageName(x.to) + (x.note ? ' — ' + x.note : '') : (x.note || k[1]);
+      return '<div class="tl"><div class="tl-ic">' + k[0] + '</div><div style="flex:1;min-width:0"><div>' + (a.kind !== 'stage' && a.kind !== 'note' ? '<b>' + k[1] + '</b> · ' : '') + esc(what) + '</div>' +
+        (x.photo && /^data:image\/jpeg;base64,/.test(x.photo) ? '<img src="' + x.photo + '" alt="" class="tl-photo" data-a="zoom">' : '') +
+        '<div class="hint" style="margin:2px 0 0">' + esc(repName(a.author_email)) + ' · ' + ago(a.created_at) + (x.loc ? ' · <a class="link" style="padding:0;font-size:12.5px" target="_blank" rel="noopener" href="https://www.google.com/maps?q=' + x.loc.lat + ',' + x.loc.lng + '">📍 location</a>' : '') + '</div></div></div>';
+    }).join('') + '</div>' : '<div class="card empty"><b>No activity yet</b>Log calls, visits and samples here so the whole team sees the story.</div>');
+    return html;
+  }
+  function accountsHtml(){
+    var all = (S.pack && S.pack.accounts) || [], q = acctQuery.toLowerCase();
+    var list = all.filter(function(a){ return (store.view === 'all' || !myCh() || a.channel === myCh()) && (!q || (a.name + ' ' + (a.city || '')).toLowerCase().indexOf(q) !== -1); })
+      .sort(function(a, b){ return (b.daysSince == null ? -1 : b.daysSince) - (a.daysSince == null ? -1 : a.daysSince); });
+    if(!S.pack) return '<div class="card empty"><b>Accounts load from Studio</b>Open Studio once so Thread Tribe’s clients sync here.</div>';
+    return viewToggle() + '<input class="search" id="aq" type="search" placeholder="Search accounts" value="' + esc(acctQuery) + '" style="margin-bottom:10px">' +
+      (list.length ? list.map(function(a){
+        var quiet = a.daysSince != null && a.daysSince >= 45;
+        return '<div class="card" style="padding:12px 14px"><div class="row" style="padding:0;border:0"><span><b>' + esc(a.name) + '</b><div class="hint" style="margin:0">' + esc([a.type, a.city, CH[a.channel] ? CH[a.channel].icon + ' ' + CH[a.channel].name : ''].filter(Boolean).join(' · ')) + (a.buyerApp ? ' · uses TT Trade' : '') + '</div></span>' +
+          '<span class="r" style="text-align:right">' + money(a.value90) + '<div class="hint" style="margin:0">90 days</div></span></div>' +
+          '<div class="hint">' + (a.lastOrder ? 'Last order ' + fmtDate(a.lastOrder) + ' · ' + a.daysSince + ' days ago' : 'No orders yet') + (quiet ? ' · <span style="color:var(--amber);font-weight:600">gone quiet</span>' : '') + (a.openOrders ? ' · ' + a.openOrders + ' open order' + (a.openOrders === 1 ? '' : 's') : '') + '</div>' +
+          '<div class="btns" style="margin-top:8px">' + (a.phone ? '<a class="btn small" href="tel:' + esc(String(a.phone).replace(/[^\d+]/g, '')) + '">📞 Call</a>' : '') + (phoneLink(a.phone) ? '<button class="btn small" data-a="acct-wa" data-id="' + esc(a.id) + '">💬 Check in</button>' : '') +
+          '<button class="btn small" data-a="acct-follow" data-id="' + esc(a.id) + '">' + (S.leads.some(function(l){ return l.data.clientId === a.id && OPEN.indexOf(l.stage) !== -1; }) ? 'Open follow-up' : '＋ Follow-up') + '</button></div></div>';
+      }).join('') : '<div class="card empty"><b>No accounts</b>' + (q ? 'Try another search.' : 'Won leads appear here once Thread Tribe sets them up.') + '</div>');
+  }
+  function catalogueHtml(){
+    var cat = (S.pack && S.pack.catalogue) || {}, ch = catCh || myCh() || 'toys', items = cat[ch] || [], q = catQuery.toLowerCase();
+    var shown = items.filter(function(i){ return !q || (i.name + ' ' + (i.category || '')).toLowerCase().indexOf(q) !== -1; });
+    var n = Object.keys(picked).filter(function(k){ return picked[k]; }).length;
+    return '<div class="seg" style="margin-bottom:8px">' + Object.keys(CH).map(function(k){ return '<button data-cat="' + k + '" class="' + (ch === k ? 'on' : '') + '">' + CH[k].icon + ' ' + CH[k].name + '<span class="n">' + (cat[k] || []).length + '</span></button>'; }).join('') + '</div>' +
+      '<input class="search" id="cq" type="search" placeholder="Search ' + esc(CH[ch].name.toLowerCase()) + '" value="' + esc(catQuery) + '" style="margin-bottom:6px">' +
+      '<div class="hint" style="margin:0 4px 10px">Trade prices are for you only — sharing sends names, links and MRP. Tap items to pick.</div>' +
+      (n ? '<div class="sharebar"><span>' + n + ' picked</span><button class="btn small" data-a="pick-clear">Clear</button><button class="btn primary small" data-a="share-picked">Share on WhatsApp</button></div>' : '') +
+      (shown.length ? '<div class="grid">' + shown.map(function(i){
+        var on = !!picked[ch + ':' + i.id];
+        return '<button class="pcard' + (on ? ' on' : '') + '" data-a="pick" data-id="' + esc(ch + ':' + i.id) + '"><div class="ph">' + (i.photo ? '<img loading="lazy" alt="" src="' + esc(i.photo) + '">' : CH[ch].icon) + (on ? '<span class="tick">✓</span>' : '') + '</div>' +
+          '<div class="n">' + esc(i.name) + '</div><div class="p">' + (i.trade ? 'Trade ' + money(i.trade) : 'Price on request') + '</div>' + (i.mrp ? '<div class="w">MRP ' + money(i.mrp) + (i.trade ? ' · ' + (i.mrp / i.trade).toFixed(1) + '×' : '') + '</div>' : '') + '</button>';
+      }).join('') + '</div>' : '<div class="card empty"><b>' + (items.length ? 'No match' : 'Nothing listed yet') + '</b>' + (items.length ? '' : 'Thread Tribe adds these from Studio’s Product Catalog.') + '</div>');
+  }
+  function teamHtml(){
+    var reps = S.team.slice().sort(function(a, b){ return (a.channel || '').localeCompare(b.channel || ''); });
+    var html = '<div class="h2" style="margin-top:0">This month</div>' + reps.map(function(r){
+      var k = kpis(r.email, r.channel), t = targets(r.channel);
+      return '<div class="card"><div class="row" style="padding-top:0"><span><b>' + esc(r.name) + '</b><div class="hint" style="margin:0">' + (CH[r.channel] ? CH[r.channel].icon + ' ' + CH[r.channel].name : '') + '</div></span><span class="r">' + k.touches + ' touches</span></div>' +
+        '<div class="mini"><div><span>Leads</span>' + bar(k.leads, t.leads) + '</div><div><span>Meetings</span>' + bar(k.meetings, t.meetings) + '</div><div><span>Won</span>' + bar(k.won, t.won) + '</div></div></div>';
+    }).join('');
+    html += '<div class="h2">Pipeline by channel</div><div class="card">' + Object.keys(CH).map(function(c){
+      var ls = S.leads.filter(function(l){ return l.channel === c; });
+      return '<div class="row"><span>' + CH[c].icon + ' ' + CH[c].name + '<div class="hint" style="margin:0">' + OPEN.map(function(s){ return stageName(s) + ' ' + ls.filter(function(l){ return l.stage === s; }).length; }).join(' · ') + '</div></span><span class="r">' + ls.filter(function(l){ return l.stage === 'won'; }).length + ' won</span></div>';
+    }).join('') + '</div>';
+    var feed = S.acts.slice(0, 25);
+    html += '<div class="h2">Latest activity</div>' + (feed.length ? '<div class="card">' + feed.map(function(a){
+      var l = lead(a.lead_id), k = KINDS[a.kind] || ['•', a.kind];
+      return '<div class="tl" data-a="lead" data-id="' + esc(a.lead_id) + '" style="cursor:pointer"><div class="tl-ic">' + k[0] + '</div><div style="flex:1;min-width:0"><div><b>' + esc(firstName(repName(a.author_email))) + '</b> · ' + (a.kind === 'stage' ? 'moved ' + esc(l ? l.data.business : 'a lead') + ' to ' + stageName((a.data || {}).to) : k[1].toLowerCase() + ' · ' + esc(l ? l.data.business : '')) + '</div><div class="hint" style="margin:0">' + ago(a.created_at) + '</div></div></div>';
+    }).join('') + '</div>' : '<div class="card empty"><b>Quiet so far</b>Activity from the whole team shows here.</div>');
+    return html + '<div class="btns"><button class="btn small ghost" data-a="signout">Sign out (' + esc(store.email) + ')</button></div>';
+  }
+
+  // ======================= sheets =======================
+  function openSheet(html){
+    document.getElementById('sheetBody').innerHTML = html;
+    var s = document.getElementById('sheet'), sc = document.getElementById('scrim');
+    s.classList.remove('hidden'); sc.classList.remove('hidden');
+    requestAnimationFrame(function(){ s.classList.add('show'); sc.classList.add('show'); });
+  }
+  function closeSheet(){
+    var s = document.getElementById('sheet'), sc = document.getElementById('scrim');
+    s.classList.remove('show'); sc.classList.remove('show');
+    setTimeout(function(){ s.classList.add('hidden'); sc.classList.add('hidden'); }, 220);
+  }
+  function opts(list, sel){ return list.map(function(x){ var v = Array.isArray(x) ? x[0] : x, t = Array.isArray(x) ? x[1] : x; return '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join(''); }
+  function leadForm(l){
+    var d = (l && l.data) || {}, ch = (l && l.channel) || myCh() || 'toys';
+    openSheet('<div class="sheet-h"><div class="t">' + (l ? 'Edit lead' : 'New lead') + '</div><button class="x" data-a="close">✕</button></div>' +
+      '<label>Business name</label><input id="f-business" value="' + esc(d.business || '') + '" placeholder="e.g. Shree Toys, Studio Ochre, Hotel Alka">' +
+      '<div class="grid2"><div><label>Contact person</label><input id="f-contact" value="' + esc(d.contact || '') + '"></div><div><label>Phone</label><input id="f-phone" inputmode="tel" value="' + esc(d.phone || '') + '"></div></div>' +
+      '<div class="grid2"><div><label>Channel</label><select id="f-channel">' + opts(Object.keys(CH).map(function(k){ return [k, CH[k].name]; }), ch) + '</select></div><div><label>Type</label><select id="f-type">' + opts([''].concat(CH[ch].types), d.type || '') + '</select></div></div>' +
+      '<div class="grid2"><div><label>Market / area</label><input id="f-market" value="' + esc(d.market || '') + '" placeholder="e.g. Sadar Bazar"></div><div><label>City</label><input id="f-city" value="' + esc(d.city || '') + '"></div></div>' +
+      '<div class="grid2"><div><label>Source</label><select id="f-source">' + opts([''].concat(SOURCES), d.source || '') + '</select></div><div><label>Potential (₹ / month)</label><input id="f-potential" type="number" inputmode="numeric" min="0" value="' + esc(d.potential || '') + '"></div></div>' +
+      '<label>Email (optional)</label><input id="f-email" type="email" inputmode="email" value="' + esc(d.email || '') + '">' +
+      '<label>Address (optional)</label><input id="f-address" value="' + esc(d.address || '') + '">' +
+      (l ? '<label>Owner</label><select id="f-owner">' + opts(S.team.map(function(r){ return [r.email, r.name + ' · ' + (CH[r.channel] || {}).name]; }), l.owner_email) + '</select>' : '') +
+      '<label>Notes</label><textarea id="f-notes" maxlength="2000" placeholder="What they sell, what they asked, who decides…">' + esc(d.notes || '') + '</textarea>' +
+      (l ? '' : '<div class="grid2"><div><label>Next follow-up</label><input id="f-next" type="date" value="' + addDays(2) + '"></div><div><label>Next step</label><input id="f-nextStep" placeholder="e.g. Share catalogue"></div></div>') +
+      '<button class="btn primary block" style="margin-top:16px" data-a="save-lead" data-id="' + esc(l ? l.id : '') + '">' + (l ? 'Save' : 'Add lead') + '</button>');
+  }
+  async function submitLead(id){
+    var business = val('f-business'), contact = val('f-contact');
+    if(!business && !contact){ toast('Add a business or contact name'); return; }
+    var phone = val('f-phone');
+    if(!id && phone){ var p = phone.replace(/\D/g, '').slice(-10); var dup = p.length === 10 && S.leads.find(function(x){ return String(x.data.phone || '').replace(/\D/g, '').slice(-10) === p; }); if(dup && !confirm((dup.data.business || 'A lead') + ' already has this number (owner ' + repName(dup.owner_email) + '). Add anyway?')) return; }
+    var l = id ? lead(id) : null;
+    var d = Object.assign({}, l ? l.data : { createdAt: new Date().toISOString(), createdBy: S.me.email }, {
+      business: business.slice(0, 120), contact: contact.slice(0, 80), phone: phone.slice(0, 20), type: val('f-type'), market: val('f-market').slice(0, 80), city: val('f-city').slice(0, 60),
+      source: val('f-source'), potential: Math.max(0, Math.round(num(val('f-potential')))), email: val('f-email').slice(0, 120), address: val('f-address').slice(0, 200), notes: val('f-notes').slice(0, 2000)
+    });
+    if(!l){ d.nextAt = val('f-next'); d.nextStep = val('f-nextStep').slice(0, 120); }
+    var row = { id: l ? l.id : 'ld' + uid(), channel: val('f-channel') || 'toys', stage: l ? l.stage : 'new', owner_email: l ? (val('f-owner') || l.owner_email) : S.me.email, data: d };
+    if(await saveLead(row)){ closeSheet(); buzz(); toast(l ? 'Saved' : 'Lead added'); open = row.id; tab = 'leads'; renderAll(); window.scrollTo(0, 0); }
+  }
+  function logForm(id, kind){
+    var l = lead(id); if(!l) return;
+    draftPhoto = ''; draftLoc = null;
+    kind = kind || 'visit';
+    openSheet('<div class="sheet-h"><div><div class="hint" style="margin:0">' + esc(l.data.business || '') + '</div><div class="t">Log activity</div></div><button class="x" data-a="close">✕</button></div>' +
+      '<div class="kinds">' + ['call', 'whatsapp', 'visit', 'meeting', 'sample', 'quote', 'note'].map(function(k){ return '<button class="kind' + (k === kind ? ' on' : '') + '" data-a="kind" data-k="' + k + '">' + KINDS[k][0] + '<span>' + KINDS[k][1] + '</span></button>'; }).join('') + '</div>' +
+      '<input type="hidden" id="g-kind" value="' + kind + '">' +
+      '<label>What happened?</label><textarea id="g-note" maxlength="2000" placeholder="e.g. Met the owner. Liked the clickers, wants mixed colours, decides after Diwali stock check."></textarea>' +
+      '<div class="btns"><label class="btn small" style="margin:0">📷 Photo<input id="g-photo" type="file" accept="image/*" capture="environment" style="display:none"></label><button class="btn small" data-a="geo">📍 Add my location</button></div><div id="g-extra" class="hint"></div>' +
+      '<div class="grid2"><div><label>Next follow-up</label><input id="g-next" type="date" value="' + addDays(3) + '"></div><div><label>Next step</label><input id="g-nextStep" placeholder="e.g. Send sample box"></div></div>' +
+      '<button class="btn primary block" style="margin-top:16px" data-a="save-log" data-id="' + esc(id) + '">Save</button>');
+  }
+  async function submitLog(id, b){
+    var l = lead(id); if(!l) return;
+    var kind = val('g-kind') || 'note', note = val('g-note');
+    if(!note && !draftPhoto && kind === 'note'){ toast('Write a note'); return; }
+    b.disabled = true;
+    var a = await logAct(id, kind, { note: note.slice(0, 2000), photo: draftPhoto || '', loc: draftLoc || null });
+    if(!a){ b.disabled = false; return; }
+    var d = Object.assign({}, l.data, { lastAt: a.created_at, lastKind: kind });
+    var nx = val('g-next'); if(nx){ d.nextAt = nx; d.nextStep = val('g-nextStep').slice(0, 120) || d.nextStep || ''; }
+    var to = KIND_STAGE[kind], si = OPEN.indexOf(l.stage);
+    var row = Object.assign({}, l, { data: d });
+    if(to && si !== -1 && OPEN.indexOf(to) > si){ await setStage(row, to, { lastAt: a.created_at, lastKind: kind, nextAt: d.nextAt, nextStep: d.nextStep }); }
+    else await saveLead(row);
+    closeSheet(); buzz(); toast('Logged'); renderAll();
+  }
+  function wonForm(id){
+    var l = lead(id); if(!l) return;
+    openSheet('<div class="sheet-h"><div class="t">🎉 Won ' + esc(l.data.business || '') + '</div><button class="x" data-a="close">✕</button></div>' +
+      '<p class="muted">Thread Tribe gets a note in Studio to set them up as a client' + (l.channel === 'toys' ? ' and invite them to the TT Trade app' : '') + '.</p>' +
+      '<label>First order value (₹, approx.)</label><input id="w-value" type="number" inputmode="numeric" min="0" value="' + esc(l.data.potential || '') + '">' +
+      '<label>Email for their account (optional)</label><input id="w-email" type="email" inputmode="email" value="' + esc(l.data.email || '') + '">' +
+      '<label>GSTIN (optional)</label><input id="w-gstin" maxlength="15" style="text-transform:uppercase" value="' + esc(l.data.gstin || '') + '">' +
+      '<label>What did they order / agree?</label><textarea id="w-note" maxlength="1000" placeholder="e.g. 200 mixed clickers, delivery by 20 Oct, pay on delivery"></textarea>' +
+      '<button class="btn primary block" style="margin-top:16px" data-a="save-won" data-id="' + esc(id) + '">Mark as won</button>');
+  }
+  function lostForm(id){
+    var l = lead(id); if(!l) return;
+    openSheet('<div class="sheet-h"><div class="t">Lost ' + esc(l.data.business || '') + '</div><button class="x" data-a="close">✕</button></div>' +
+      '<label>Why?</label><select id="x-reason">' + opts(LOST, '') + '</select><label>Anything to remember?</label><textarea id="x-note" maxlength="1000"></textarea>' +
+      '<label>Try again on (optional)</label><input id="x-again" type="date">' +
+      '<button class="btn primary block" style="margin-top:16px" data-a="save-lost" data-id="' + esc(id) + '">Mark as lost</button>');
+  }
+  function pickLeadSheet(){
+    var mine = S.leads.filter(function(l){ return OPEN.indexOf(l.stage) !== -1 && (S.me.admin || l.owner_email === S.me.email); })
+      .sort(function(a, b){ return (b.updated_at || '').localeCompare(a.updated_at || ''); });
+    openSheet('<div class="sheet-h"><div class="t">Log a visit for…</div><button class="x" data-a="close">✕</button></div>' +
+      '<button class="btn primary block" data-a="new-lead">＋ Someone new</button><input class="search" id="pq" type="search" placeholder="Search your leads" style="margin:10px 0">' +
+      '<div id="pickList">' + mine.slice(0, 40).map(function(l){ return '<button class="job" data-a="log-for" data-id="' + esc(l.id) + '" data-q="' + esc(((l.data.business || '') + ' ' + (l.data.contact || '') + ' ' + (l.data.market || '')).toLowerCase()) + '"><span class="body"><span class="t">' + esc(l.data.business || l.data.contact) + '</span><span class="s" style="display:block">' + esc([l.data.market, l.data.city, stageName(l.stage)].filter(Boolean).join(' · ')) + '</span></span><span class="chev">›</span></button>'; }).join('') + '</div>');
+  }
+  function waMessage(l){
+    var d = l.data || {}, c = CH[l.channel] || CH.toys;
+    return 'Hi' + (d.contact ? ' ' + firstName(d.contact) : '') + ', this is ' + firstName(S.me.name) + ' from Thread Tribe — ' + c.pitch;
+  }
+  function shrink(file){
+    return new Promise(function(resolve){
+      var fr = new FileReader();
+      fr.onload = function(){
+        var img = new Image();
+        img.onload = function(){
+          var side = 1000, q = 0.7, d = '';
+          do{
+            var sc = Math.min(1, side / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+            cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+            cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+            d = cv.toDataURL('image/jpeg', q);
+            if(q > 0.45) q -= 0.1; else side = Math.round(side * 0.8);
+          } while(d.length > 150000 && side > 300);
+          resolve(d.length <= 200000 ? d : '');
+        };
+        img.onerror = function(){ resolve(''); };
+        img.src = fr.result;
+      };
+      fr.onerror = function(){ resolve(''); };
+      fr.readAsDataURL(file);
+    });
+  }
+  function extraLine(){ var e = document.getElementById('g-extra'); if(e) e.innerHTML = (draftPhoto ? '<img src="' + draftPhoto + '" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:10px;vertical-align:middle;margin-right:8px">' : '') + (draftLoc ? '📍 Location added' : ''); }
+
+  // ======================= render =======================
+  function renderAll(){
+    var signin = document.getElementById('signin'), screen = document.getElementById('screen'), nav = document.getElementById('nav');
+    if(cloud.booting){ signin.classList.add('hidden'); screen.classList.add('hidden'); nav.classList.add('hidden'); return; }
+    if(!session){ screen.classList.add('hidden'); nav.classList.add('hidden'); signin.classList.remove('hidden'); document.getElementById('title').textContent = 'Welcome'; renderSignin(); return; }
+    if(S.missing || S.notOnTeam || !S.loaded){
+      screen.classList.add('hidden'); nav.classList.add('hidden'); signin.classList.remove('hidden');
+      document.getElementById('title').textContent = 'Almost there';
+      signin.innerHTML = '<div class="signin card">' + (!S.loaded ? '<b>Loading…</b>' : S.missing ? '<h1>Not switched on yet</h1><p class="muted">Thread Tribe is still setting up the sales app.</p>' :
+        '<h1>Almost there</h1><p class="muted" style="font-size:15px">You’re signed in as <b style="color:var(--text)">' + esc(store.email) + '</b>, but this email isn’t on the sales team yet. Ask Thread Tribe to add it in Studio → Sales → Team.</p>') +
+        '<button class="btn primary block" style="margin-top:16px" data-si="refresh">Check again</button><button class="btn ghost block" style="margin-top:8px" data-si="signout">Use a different email</button></div>';
+      return;
+    }
+    signin.classList.add('hidden'); screen.classList.remove('hidden'); nav.classList.remove('hidden');
+    document.getElementById('eyebrow').textContent = 'Thread Tribe Sales' + (myCh() ? ' · ' + CH[myCh()].name : '');
+    var titles = { today: S.me.name || 'Today', leads: 'Leads', accounts: 'Accounts', catalogue: 'Catalogue', team: 'Team' };
+    document.getElementById('title').textContent = tab === 'leads' && open && lead(open) ? 'Lead' : titles[tab];
+    var ae = document.activeElement;
+    if(!(ae && screen.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName))){
+      screen.innerHTML = tab === 'leads' ? leadsHtml() : tab === 'accounts' ? accountsHtml() : tab === 'catalogue' ? catalogueHtml() : tab === 'team' ? teamHtml() : todayHtml();
+    }
+    var due = dueLeads(S.me.admin ? '' : S.me.email).length;
+    nav.querySelectorAll('button').forEach(function(btn){
+      var t = btn.getAttribute('data-tab'); btn.classList.toggle('on', t === tab);
+      var old = btn.querySelector('.badge'); if(old) old.remove();
+      if(t === 'today' && due){ var s = document.createElement('span'); s.className = 'badge'; s.textContent = due; btn.appendChild(s); }
+    });
+  }
+
+  // ======================= events =======================
+  document.addEventListener('click', async function(e){
+    var nb = e.target.closest('#nav [data-tab]');
+    if(nb){ tab = nb.getAttribute('data-tab'); open = null; renderAll(); window.scrollTo(0, 0); return; }
+    var sg = e.target.closest('[data-seg]'); if(sg){ stageSeg = sg.getAttribute('data-seg'); renderAll(); return; }
+    var vw = e.target.closest('[data-view]'); if(vw){ store.view = vw.getAttribute('data-view'); save(); renderAll(); return; }
+    var ct = e.target.closest('[data-cat]'); if(ct){ catCh = ct.getAttribute('data-cat'); renderAll(); return; }
+    if(e.target.id === 'scrim'){ closeSheet(); return; }
+    var b = e.target.closest('[data-a]'); if(!b) return;
+    var a = b.getAttribute('data-a'), id = b.getAttribute('data-id');
+    if(a === 'close') closeSheet();
+    else if(a === 'tab'){ tab = b.getAttribute('data-tab'); open = null; renderAll(); window.scrollTo(0, 0); }
+    else if(a === 'lead'){ closeSheet(); tab = 'leads'; open = id; renderAll(); window.scrollTo(0, 0); loadLeadActs(id); }
+    else if(a === 'back'){ open = null; renderAll(); }
+    else if(a === 'new-lead') leadForm(null);
+    else if(a === 'edit-lead') leadForm(lead(id));
+    else if(a === 'save-lead'){ b.disabled = true; await submitLead(id); b.disabled = false; }
+    else if(a === 'pick-lead') pickLeadSheet();
+    else if(a === 'log-for') logForm(id, 'visit');
+    else if(a === 'log') logForm(id, 'visit');
+    else if(a === 'kind'){ document.querySelectorAll('.kind').forEach(function(x){ x.classList.toggle('on', x === b); }); document.getElementById('g-kind').value = b.getAttribute('data-k'); }
+    else if(a === 'save-log') await submitLog(id, b);
+    else if(a === 'geo'){
+      if(!navigator.geolocation){ toast('Location isn’t available on this phone'); return; }
+      b.disabled = true; b.textContent = 'Finding you…';
+      navigator.geolocation.getCurrentPosition(function(p){ draftLoc = { lat: Math.round(p.coords.latitude * 1e5) / 1e5, lng: Math.round(p.coords.longitude * 1e5) / 1e5 }; b.textContent = '📍 Added'; extraLine(); },
+        function(){ b.disabled = false; b.textContent = '📍 Add my location'; toast('Couldn’t get your location'); }, { enableHighAccuracy: true, timeout: 10000 });
+    }
+    else if(a === 'quick-log'){ var ql = lead(id); if(ql) setTimeout(function(){ logForm(id, b.getAttribute('data-k')); }, 400); }
+    else if(a === 'wa'){
+      var wl = lead(id); if(!wl) return;
+      window.open('https://wa.me/' + phoneLink(wl.data.phone) + '?text=' + encodeURIComponent(waMessage(wl)), '_blank');
+      setTimeout(function(){ logForm(id, 'whatsapp'); }, 400);
+    }
+    else if(a === 'stage'){ var sl = lead(id); if(sl && await setStage(Object.assign({}, sl), b.getAttribute('data-st'))){ toast('Moved to ' + stageName(b.getAttribute('data-st'))); renderAll(); } }
+    else if(a === 'won') wonForm(id);
+    else if(a === 'save-won'){
+      var wl2 = lead(id); if(!wl2) return; b.disabled = true;
+      var ok = await setStage(Object.assign({}, wl2), 'won', { wonAt: new Date().toISOString(), wonValue: Math.max(0, Math.round(num(val('w-value')))), wonNote: val('w-note').slice(0, 1000),
+        email: val('w-email') || wl2.data.email || '', gstin: val('w-gstin').toUpperCase(), nextAt: '', nextStep: '' });
+      b.disabled = false; if(ok){ closeSheet(); buzz(); toast('🎉 Won — well done!'); renderAll(); }
+    }
+    else if(a === 'lost') lostForm(id);
+    else if(a === 'save-lost'){
+      var ll = lead(id); if(!ll) return; b.disabled = true;
+      var reason = val('x-reason') + (val('x-note') ? ' — ' + val('x-note') : '');
+      var ok2 = await setStage(Object.assign({}, ll), 'lost', { lostAt: new Date().toISOString(), lostReason: reason.slice(0, 500), nextAt: val('x-again') || '', nextStep: val('x-again') ? 'Try again' : '' });
+      b.disabled = false; if(ok2){ closeSheet(); toast('Marked as lost'); renderAll(); }
+    }
+    else if(a === 'reopen'){ var rl = lead(id); if(rl && await setStage(Object.assign({}, rl), 'contacted', { nextAt: addDays(1) })){ toast('Reopened'); renderAll(); } }
+    else if(a === 'acct-wa'){
+      var ac = ((S.pack && S.pack.accounts) || []).find(function(x){ return x.id === id; }); if(!ac) return;
+      window.open('https://wa.me/' + phoneLink(ac.phone) + '?text=' + encodeURIComponent('Hi' + (ac.contact ? ' ' + firstName(ac.contact) : '') + ', ' + firstName(S.me.name) + ' from Thread Tribe here — just checking in. Anything you need for your next order? We have some new designs I can share.'), '_blank');
+    }
+    else if(a === 'acct-follow'){
+      var acc = ((S.pack && S.pack.accounts) || []).find(function(x){ return x.id === id; }); if(!acc) return;
+      var ex = S.leads.find(function(l){ return l.data.clientId === acc.id && OPEN.indexOf(l.stage) !== -1; });
+      if(ex){ tab = 'leads'; open = ex.id; renderAll(); loadLeadActs(ex.id); return; }
+      var nl = { id: 'ld' + uid(), channel: acc.channel || myCh() || 'toys', stage: 'contacted', owner_email: S.me.email,
+        data: { business: acc.name, contact: acc.contact || '', phone: acc.phone || '', city: acc.city || '', type: acc.type || '', source: 'Existing client', clientId: acc.id, createdAt: new Date().toISOString(), createdBy: S.me.email, nextAt: today(), nextStep: 'Check in for a reorder' } };
+      if(await saveLead(nl)){ tab = 'leads'; open = nl.id; renderAll(); logForm(nl.id, 'call'); }
+    }
+    else if(a === 'pick'){ picked[id] = !picked[id]; renderAll(); }
+    else if(a === 'pick-clear'){ picked = {}; renderAll(); }
+    else if(a === 'share-picked'){
+      var cat = (S.pack && S.pack.catalogue) || {}, lines = [];
+      Object.keys(picked).forEach(function(k){
+        if(!picked[k]) return;
+        var ch = k.split(':')[0], iid = k.slice(ch.length + 1), it = (cat[ch] || []).find(function(x){ return String(x.id) === iid; });
+        if(it) lines.push('• ' + it.name + (it.mrp ? ' — MRP ₹' + it.mrp : '') + (it.url ? '\n  ' + it.url : ''));
+      });
+      if(!lines.length) return;
+      window.open('https://wa.me/?text=' + encodeURIComponent('A few picks from Thread Tribe:\n' + lines.join('\n') + '\n\nTrade prices and minimums on request — happy to send samples.'), '_blank');
+    }
+    else if(a === 'zoom'){ openSheet('<div class="sheet-h"><div class="t">Photo</div><button class="x" data-a="close">✕</button></div><img src="' + b.getAttribute('src') + '" alt="" style="width:100%;border-radius:12px">'); }
+    else if(a === 'signout') signOut();
+  });
+  document.addEventListener('change', async function(e){
+    var t = e.target;
+    if(t.id === 'f-channel'){ var ty = document.getElementById('f-type'); if(ty) ty.innerHTML = opts([''].concat(CH[t.value].types), ''); }
+    else if(t.id === 'g-photo' && t.files && t.files[0]){ var f = t.files[0]; t.value = ''; draftPhoto = await shrink(f); if(!draftPhoto) toast('Couldn’t use that photo'); extraLine(); }
+  });
+  document.addEventListener('input', function(e){
+    var t = e.target;
+    if(t.id === 'lq'){ leadQuery = t.value; var p = t.selectionStart; renderAll(); var n = document.getElementById('lq'); if(n){ n.focus(); try{ n.setSelectionRange(p, p); }catch(x){} } }
+    else if(t.id === 'aq'){ acctQuery = t.value; var p2 = t.selectionStart; renderAll(); var n2 = document.getElementById('aq'); if(n2){ n2.focus(); try{ n2.setSelectionRange(p2, p2); }catch(x){} } }
+    else if(t.id === 'cq'){ catQuery = t.value; var p3 = t.selectionStart; renderAll(); var n3 = document.getElementById('cq'); if(n3){ n3.focus(); try{ n3.setSelectionRange(p3, p3); }catch(x){} } }
+    else if(t.id === 'pq'){ var q = t.value.toLowerCase(); document.querySelectorAll('#pickList [data-q]').forEach(function(x){ x.style.display = !q || x.getAttribute('data-q').indexOf(q) !== -1 ? '' : 'none'; }); }
+  });
+
+  // ======================= sign in =======================
+  function okEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+  function friendlyAuth(err){
+    var m = String((err && err.message) || err || '');
+    if(/rate limit|security purposes|seconds/i.test(m)) return 'Please wait a minute before asking for another code.';
+    if(/expired|invalid|otp/i.test(m)) return 'That code didn’t work — check it, or ask for a new one.';
+    if(/fetch|network|Load failed/i.test(m)) return 'No internet connection.';
+    return m || 'Something went wrong.';
+  }
+  function renderSignin(){
+    var el = document.getElementById('signin');
+    if(!sb){ el.innerHTML = '<div class="signin card"><h1>Can’t connect</h1><p class="muted">Check your internet connection and reload.</p></div>'; return; }
+    if(!cloud.otpEmail){
+      el.innerHTML = '<div class="signin card"><h1>Sign in</h1><p class="muted" style="font-size:15px">Use your work email. We’ll send you a 6-digit code — no password.</p>' +
+        '<label>Email</label><input type="email" id="siEmail" autocomplete="email" inputmode="email" placeholder="you@example.com" value="' + esc(store.email || '') + '">' +
+        '<button class="btn primary block" style="margin-top:14px" data-si="send">Email me a code</button><div class="err">' + esc(cloud.err) + '</div></div>';
+    } else {
+      el.innerHTML = '<div class="signin card"><h1>Check your email</h1><p class="muted" style="font-size:15px">We sent a code to <b style="color:var(--text)">' + esc(cloud.otpEmail) + '</b>. Check spam if it’s not there in a minute.</p>' +
+        '<label>Code</label><input type="text" id="siCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="font-size:22px;letter-spacing:6px;text-align:center">' +
+        '<button class="btn primary block" style="margin-top:14px" data-si="verify">Sign in</button><div class="err">' + esc(cloud.err) + '</div>' +
+        '<button class="btn ghost block" style="margin-top:6px" data-si="restart">Use a different email</button></div>';
+    }
+  }
+  document.getElementById('signin').addEventListener('click', async function(e){
+    var b = e.target.closest('[data-si]'); if(!b) return;
+    var a = b.getAttribute('data-si');
+    if(a === 'restart'){ cloud.otpEmail = ''; cloud.err = ''; renderSignin(); return; }
+    if(a === 'signout'){ signOut(); return; }
+    if(a === 'refresh'){ S.loaded = false; renderAll(); refresh(); return; }
+    if(a === 'send'){
+      var email = String(document.getElementById('siEmail').value || '').trim().toLowerCase();
+      if(!okEmail(email)){ cloud.err = 'Enter a valid email address.'; renderSignin(); return; }
+      b.disabled = true; b.textContent = 'Sending…';
+      var r = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true } });
+      cloud.err = r.error ? friendlyAuth(r.error) : '';
+      if(!r.error) cloud.otpEmail = email;
+      renderSignin();
+      setTimeout(function(){ var c = document.getElementById('siCode'); if(c) c.focus(); }, 50);
+      return;
+    }
+    if(a === 'verify'){
+      var code = String(document.getElementById('siCode').value || '').replace(/\s+/g, '');
+      if(!/^\d{6,10}$/.test(code)){ cloud.err = 'Enter the code from the email.'; renderSignin(); return; }
+      b.disabled = true; b.textContent = 'Checking…';
+      var v = await sb.auth.verifyOtp({ email: cloud.otpEmail, token: code, type: 'email' });
+      if(v.error){ cloud.err = friendlyAuth(v.error); renderSignin(); return; }
+      cloud.otpEmail = ''; cloud.err = '';
+      if(v.data && v.data.session) onSignedIn(v.data.session);
+    }
+  });
+  document.getElementById('signin').addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    var b = document.querySelector('#signin [data-si="send"], #signin [data-si="verify"]'); if(b) b.click();
+  });
+  function onSignedIn(s){
+    var email = String((s.user && s.user.email) || '').toLowerCase();
+    var same = session && session.user && session.user.id === s.user.id;
+    session = s; store.email = email; save();
+    if(!same){ S.loaded = false; refresh(); }
+    renderAll();
+  }
+  async function signOut(){
+    try{ if(rt) await sb.removeChannel(rt); }catch(e){}
+    rt = null;
+    try{ await sb.auth.signOut(); }catch(e){}
+    session = null; S = { me: null, team: [], leads: [], acts: [], pack: null, missing: false, notOnTeam: false, loaded: false, leadActs: {} };
+    closeSheet(); renderAll();
+  }
+
+  if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg){
+        document.addEventListener('visibilitychange', function(){ if(!document.hidden) reg.update().catch(function(){}); });
+      }).catch(function(){});
+      var reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function(){ if(reloaded) return; reloaded = true; location.reload(); });
+    });
+  }
+
+  function init(){
+    load();
+    if(window.supabase && window.supabase.createClient){
+      try{ sb = window.supabase.createClient(CLOUD_URL, CLOUD_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'tt-sales-auth' } }); }catch(e){ sb = null; }
+    }
+    if(sb){
+      sb.auth.onAuthStateChange(function(ev, s){
+        setTimeout(function(){
+          cloud.booting = false;
+          if(s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION' || ev === 'TOKEN_REFRESHED')) onSignedIn(s);
+          else if(ev === 'INITIAL_SESSION' && !s) renderAll();
+          else if(ev === 'SIGNED_OUT' && session){ session = null; renderAll(); }
+        }, 0);
+      });
+      document.addEventListener('visibilitychange', function(){ if(!document.hidden && session) refresh(); });
+      setInterval(function(){ if(!document.hidden && session && !document.getElementById('sheet').classList.contains('show')) refresh(); }, 60000);
+      setTimeout(function(){ if(cloud.booting){ cloud.booting = false; renderAll(); } }, 4000);
+    } else cloud.booting = false;
+    renderAll();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
