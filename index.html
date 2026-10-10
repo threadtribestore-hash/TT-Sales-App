@@ -193,6 +193,7 @@
   .pcard .n{ font-weight:600; font-size:13.5px; margin-top:6px; line-height:1.25; } .pcard .p{ font-size:13px; } .pcard .w{ font-size:12px; color:var(--dim); }
   .sharebar{ position:sticky; top:6px; z-index:5; display:flex; gap:8px; align-items:center; background:var(--panel); border:1px solid var(--accent); border-radius:14px; padding:8px 10px; margin-bottom:10px; box-shadow:var(--shadow); } .sharebar span{ flex:1; font-weight:600; }
   .search{ margin:0; }
+  .ocard{ padding:12px 14px; } .ocard .bar{ margin-top:6px; } .ometa{ font-size:12.5px; color:var(--dim); margin-top:4px; }
   .seg{ flex-wrap:nowrap; }
   @media (min-width:900px){ .wrap{ max-width:760px; } }
 </style>
@@ -244,6 +245,7 @@
   var sb = null, session = null, rt = null;
   var S = { me: null, team: [], leads: [], acts: [], pack: null, missing: false, notOnTeam: false, loaded: false, leadActs: {} };
   var cloud = { otpEmail: '', err: '', booting: true };
+  var openAcct = null, acctCh = '';
   var tab = 'today', open = null, stageSeg = 'open', leadQuery = '', acctQuery = '', catCh = '', catQuery = '', picked = {}, draftPhoto = '', draftLoc = null;
 
   function load(){ try{ var s = JSON.parse(localStorage.getItem(KEY)); if(s) store = Object.assign(store, s); }catch(e){} }
@@ -287,9 +289,9 @@
     var res = await Promise.all([
       sb.from('sales_leads').select('id,channel,stage,owner_email,data,updated_at').order('updated_at', { ascending: false }).limit(5000),
       sb.from('sales_activities').select('id,lead_id,kind,author_email,data,created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(5000),
-      sb.from('sales_pack').select('pack,updated_at').eq('id', 'main').maybeSingle()
+      sb.from('sales_pack').select('id,pack,updated_at')
     ]);
-    S.leads = res[0].data || []; S.acts = res[1].data || []; S.pack = (res[2].data && res[2].data.pack) || null;
+    S.leads = res[0].data || []; S.acts = res[1].data || []; S.pack = composePack(res[2].data || []);
     S.loaded = true;
     if(!rt){
       try{
@@ -300,6 +302,35 @@
       }catch(e){}
     }
     renderAll();
+  }
+  // 'main' holds team targets and channel totals; each channel's clients, orders and catalogue
+  // come in their own row, and the database only hands a salesperson their own channel's row.
+  function composePack(rows){
+    if(!rows.length) return null;
+    var packs = {}; rows.forEach(function(r){ packs[r.id] = r.pack || {}; });
+    var main = packs.main || {}, out = { targets: main.targets || {}, actuals: main.actuals || {}, accounts: [], catalogue: {}, channels: [] };
+    Object.keys(CH).forEach(function(ch){
+      if(!packs[ch]) return;
+      out.channels.push(ch);
+      out.accounts = out.accounts.concat(packs[ch].accounts || []);
+      out.catalogue[ch] = packs[ch].catalogue || [];
+    });
+    if(!out.channels.length && main.accounts){ out.accounts = main.accounts; out.catalogue = main.catalogue || {}; out.channels = Object.keys(out.catalogue); }
+    return out;
+  }
+  function account(id){ return ((S.pack && S.pack.accounts) || []).find(function(a){ return a.id === id; }); }
+  var OSTATUS = { quoted: 'Quote', booked: 'Confirmed', in_production: 'In production', production_done: 'Ready', shipped: 'Dispatched', delivered: 'Delivered', cancelled: 'Cancelled' };
+  function orderCard(o, a){
+    var qty = o.lines.reduce(function(t, l){ return t + (l.qty || 0); }, 0), made = o.lines.reduce(function(t, l){ return t + (l.made || 0); }, 0);
+    var late = o.dueDate && o.dueDate < today() && ['shipped', 'delivered'].indexOf(o.status) === -1;
+    var chip = o.status === 'delivered' ? 'ok' : o.status === 'shipped' ? 'ok' : late ? 'late' : o.status === 'production_done' ? 'soon' : '';
+    return '<div class="card ocard"><div class="row" style="padding-top:0;border:0"><span><b>' + esc(o.displayId || 'Order') + '</b>' + (o.name ? ' · ' + esc(o.name) : '') + (a ? '<div class="hint" style="margin:0">' + esc(a.name) + '</div>' : '') + '</span><span class="chip ' + chip + '">' + esc(OSTATUS[o.status] || o.status) + (late ? ' · late' : '') + '</span></div>' +
+      (o.status === 'in_production' || o.status === 'booked' ? '<div class="bar"><span style="width:' + (qty ? Math.round(100 * made / qty) : 0) + '%;background:var(--accent)"></span></div><div class="hint">' + made + ' of ' + qty + ' pcs made' + (o.printers ? ' · ' + o.printers + ' printer' + (o.printers === 1 ? '' : 's') + ' on it now' : '') + '</div>' : '') +
+      '<div class="hint">' + o.lines.slice(0, 4).map(function(l){ return esc(l.name) + ' × ' + l.qty; }).join(', ') + (o.lines.length > 4 ? ' +' + (o.lines.length - 4) + ' more' : '') + '</div>' +
+      '<div class="ometa">' + [o.orderedDate ? 'Ordered ' + fmtDate(o.orderedDate) : '', o.dueDate && o.status !== 'delivered' ? 'Due ' + fmtDate(o.dueDate) : '', o.dispatchBy && ['booked', 'in_production', 'production_done'].indexOf(o.status) !== -1 ? 'Ships by ' + fmtDate(o.dispatchBy) : '',
+        o.shippedDate ? 'Dispatched ' + fmtDate(o.shippedDate) + (o.courier ? ' · ' + esc(o.courier) : '') : '', o.deliveryDate && o.status === 'delivered' ? 'Delivered ' + fmtDate(o.deliveryDate) : ''].filter(Boolean).join(' · ') + '</div>' +
+      (o.trackingNo ? '<div class="hint">AWB ' + esc(o.trackingNo) + ' · <a class="link" style="padding:0;font-size:12.5px" target="_blank" rel="noopener" href="https://www.google.com/search?q=' + encodeURIComponent((o.courier || 'courier') + ' tracking ' + o.trackingNo) + '">track</a></div>' : '') +
+      '<div class="row" style="border:0;padding-bottom:0"><span class="muted">' + (o.invoiceNumber ? esc(o.invoiceNumber) + ' · ' : '') + money(o.total) + '</span><span class="r" style="' + (o.due > 0 ? 'color:var(--amber)' : 'color:var(--green)') + '">' + (o.due > 0 ? money(o.due) + ' due' : o.paymentStatus === 'paid' ? 'Paid' : '') + '</span></div></div>';
   }
   var soonT = null;
   function soon(){ clearTimeout(soonT); soonT = setTimeout(refresh, 600); }
@@ -379,6 +410,13 @@
     html += '<div class="h2">Follow-ups due<span class="count">' + due.length + '</span></div>' + (due.length ? due.slice(0, 12).map(leadRow).join('') : '<div class="card empty"><b>All caught up ✓</b>Set a next follow-up on every lead and it shows here on the day.</div>');
     var loose = S.leads.filter(function(l){ return OPEN.indexOf(l.stage) !== -1 && (me.admin || l.owner_email === me.email) && !l.data.nextAt; });
     if(loose.length) html += '<div class="act warn" data-a="tab" data-tab="leads" style="cursor:pointer"><div class="ic">⏳</div><div class="body"><div class="t">' + loose.length + ' open lead' + (loose.length === 1 ? '' : 's') + ' with no next step</div><div class="s">Give each one a follow-up date so nothing goes cold.</div></div></div>';
+    var watch = [];
+    ((S.pack && S.pack.accounts) || []).forEach(function(a){ (a.orders || []).forEach(function(o){
+      var late = o.dueDate && o.dueDate < today() && o.status !== 'shipped';
+      if(late || o.status === 'shipped' || o.status === 'production_done' || (o.dueDate && daysUntil(o.dueDate) <= 3)) watch.push({ a: a, o: o, w: late ? 0 : o.status === 'production_done' ? 1 : o.status === 'shipped' ? 2 : 3 });
+    }); });
+    watch.sort(function(x, y){ return x.w - y.w || (x.o.dueDate || '').localeCompare(y.o.dueDate || ''); });
+    if(watch.length) html += '<div class="h2">Your clients’ orders to watch<span class="count">' + watch.length + '</span></div>' + watch.slice(0, 5).map(function(x){ return '<div data-a="acct" data-id="' + esc(x.a.id) + '" style="cursor:pointer">' + orderCard(x.o, x.a) + '</div>'; }).join('');
     var quiet = ((S.pack && S.pack.accounts) || []).filter(function(a){ return (!ch || a.channel === ch) && a.daysSince != null && a.daysSince >= 45; });
     if(quiet.length) html += '<div class="act" data-a="tab" data-tab="accounts" style="cursor:pointer"><div class="ic">🔁</div><div class="body"><div class="t">' + quiet.length + ' account' + (quiet.length === 1 ? '' : 's') + ' gone quiet</div><div class="s">No order in 45+ days — a quick check-in often brings a reorder.</div></div></div>';
     var wins = S.leads.filter(function(l){ return l.stage === 'won' && (l.data.wonAt || '') >= addDays(-7); });
@@ -433,25 +471,45 @@
     return html;
   }
   function accountsHtml(){
-    var all = (S.pack && S.pack.accounts) || [], q = acctQuery.toLowerCase();
-    var list = all.filter(function(a){ return (store.view === 'all' || !myCh() || a.channel === myCh()) && (!q || (a.name + ' ' + (a.city || '')).toLowerCase().indexOf(q) !== -1); })
+    if(openAcct && account(openAcct)) return accountHtml(account(openAcct));
+    var all = (S.pack && S.pack.accounts) || [], q = acctQuery.toLowerCase(), chs = (S.pack && S.pack.channels) || [];
+    var list = all.filter(function(a){ return (!acctCh || a.channel === acctCh) && (!q || (a.name + ' ' + (a.city || '')).toLowerCase().indexOf(q) !== -1); })
       .sort(function(a, b){ return (b.daysSince == null ? -1 : b.daysSince) - (a.daysSince == null ? -1 : a.daysSince); });
     if(!S.pack) return '<div class="card empty"><b>Accounts load from Studio</b>Open Studio once so Thread Tribe’s clients sync here.</div>';
-    return viewToggle() + '<input class="search" id="aq" type="search" placeholder="Search accounts" value="' + esc(acctQuery) + '" style="margin-bottom:10px">' +
+    var openN = all.filter(function(a){ return !acctCh || a.channel === acctCh; }).reduce(function(t, a){ return t + (a.openOrders || 0); }, 0);
+    return (chs.length > 1 ? '<div class="seg" style="margin-bottom:8px"><button data-acch="" class="' + (!acctCh ? 'on' : '') + '">All</button>' + chs.map(function(c){ return '<button data-acch="' + c + '" class="' + (acctCh === c ? 'on' : '') + '">' + CH[c].icon + ' ' + CH[c].name + '</button>'; }).join('') + '</div>' : '') +
+      '<div class="hint" style="margin:0 4px 8px">' + list.length + ' client' + (list.length === 1 ? '' : 's') + (chs.length === 1 ? ' in ' + CH[chs[0]].name : '') + ' · ' + openN + ' current order' + (openN === 1 ? '' : 's') + '</div>' +
+      '<input class="search" id="aq" type="search" placeholder="Search accounts" value="' + esc(acctQuery) + '" style="margin-bottom:10px">' +
       (list.length ? list.map(function(a){
         var quiet = a.daysSince != null && a.daysSince >= 45;
-        return '<div class="card" style="padding:12px 14px"><div class="row" style="padding:0;border:0"><span><b>' + esc(a.name) + '</b><div class="hint" style="margin:0">' + esc([a.type, a.city, CH[a.channel] ? CH[a.channel].icon + ' ' + CH[a.channel].name : ''].filter(Boolean).join(' · ')) + (a.buyerApp ? ' · uses TT Trade' : '') + '</div></span>' +
+        return '<div class="card" style="padding:12px 14px"><div class="row" style="padding:0;border:0;cursor:pointer" data-a="acct" data-id="' + esc(a.id) + '"><span><b>' + esc(a.name) + ' ›</b><div class="hint" style="margin:0">' + esc([a.type, a.city, CH[a.channel] ? CH[a.channel].icon + ' ' + CH[a.channel].name : ''].filter(Boolean).join(' · ')) + (a.buyerApp ? ' · uses TT Trade' : '') + '</div></span>' +
           '<span class="r" style="text-align:right">' + money(a.value90) + '<div class="hint" style="margin:0">90 days</div></span></div>' +
-          '<div class="hint">' + (a.lastOrder ? 'Last order ' + fmtDate(a.lastOrder) + ' · ' + a.daysSince + ' days ago' : 'No orders yet') + (quiet ? ' · <span style="color:var(--amber);font-weight:600">gone quiet</span>' : '') + (a.openOrders ? ' · ' + a.openOrders + ' open order' + (a.openOrders === 1 ? '' : 's') : '') + '</div>' +
+          '<div class="hint">' + (a.lastOrder ? 'Last order ' + fmtDate(a.lastOrder) + ' · ' + a.daysSince + ' days ago' : 'No orders yet') + (quiet ? ' · <span style="color:var(--amber);font-weight:600">gone quiet</span>' : '') + (a.openOrders ? ' · <b style="color:var(--accent)">' + a.openOrders + ' current order' + (a.openOrders === 1 ? '' : 's') + '</b>' : '') + (a.due > 0 ? ' · <span style="color:var(--amber)">' + money(a.due) + ' due</span>' : '') + '</div>' +
           '<div class="btns" style="margin-top:8px">' + (a.phone ? '<a class="btn small" href="tel:' + esc(String(a.phone).replace(/[^\d+]/g, '')) + '">📞 Call</a>' : '') + (phoneLink(a.phone) ? '<button class="btn small" data-a="acct-wa" data-id="' + esc(a.id) + '">💬 Check in</button>' : '') +
           '<button class="btn small" data-a="acct-follow" data-id="' + esc(a.id) + '">' + (S.leads.some(function(l){ return l.data.clientId === a.id && OPEN.indexOf(l.stage) !== -1; }) ? 'Open follow-up' : '＋ Follow-up') + '</button></div></div>';
       }).join('') : '<div class="card empty"><b>No accounts</b>' + (q ? 'Try another search.' : 'Won leads appear here once Thread Tribe sets them up.') + '</div>');
   }
+  function accountHtml(a){
+    var leads = S.leads.filter(function(l){ return l.data.clientId === a.id; });
+    var info = [['Contact', a.contact], ['Phone', a.phone], ['Email', a.email], ['City', a.city], ['Address', a.address], ['GSTIN', a.gstin]].filter(function(x){ return x[1]; });
+    var html = '<button class="link" data-a="acct-back">‹ Accounts</button><div class="card"><div style="font-size:20px;font-weight:700">' + esc(a.name) + '</div>' +
+      '<div class="hint" style="margin-top:2px">' + esc([a.type, CH[a.channel] ? CH[a.channel].icon + ' ' + CH[a.channel].name : ''].filter(Boolean).join(' · ')) + (a.buyerApp ? ' · orders on TT Trade' : '') + '</div>' +
+      '<div class="stats" style="margin-top:12px"><div class="stat"><div class="k">Last 90 days</div><div class="v">' + money(a.value90) + '</div></div><div class="stat"><div class="k">All time</div><div class="v">' + money(a.lifetime || 0) + '</div><div class="hint">' + (a.orderCount || 0) + ' orders</div></div></div>' +
+      (a.due > 0 ? '<div class="note warn" style="margin-top:0">' + money(a.due) + ' still to collect</div>' : '') +
+      '<div class="btns">' + (a.phone ? '<a class="btn small" href="tel:' + esc(String(a.phone).replace(/[^\d+]/g, '')) + '">📞 Call</a>' : '') + (phoneLink(a.phone) ? '<button class="btn small" data-a="acct-wa" data-id="' + esc(a.id) + '">💬 WhatsApp</button>' : '') +
+        '<button class="btn small" data-a="acct-follow" data-id="' + esc(a.id) + '">' + (leads.some(function(l){ return OPEN.indexOf(l.stage) !== -1; }) ? 'Open follow-up' : '＋ Follow-up') + '</button></div></div>';
+    html += '<div class="h2">Current orders<span class="count">' + (a.orders || []).length + '</span></div>' + ((a.orders || []).length ? a.orders.map(function(o){ return orderCard(o); }).join('') : '<div class="card empty"><b>No current orders</b>' + (a.daysSince != null ? 'Last order ' + a.daysSince + ' days ago.' : '') + '</div>');
+    if((a.recent || []).length) html += '<div class="h2">Recent orders</div>' + a.recent.map(function(o){ return orderCard(o); }).join('');
+    if(info.length) html += '<div class="h2">Details</div><div class="card">' + info.map(function(x){ return '<div class="row"><span class="muted">' + x[0] + '</span><span class="r" style="font-weight:500;white-space:normal;text-align:right">' + esc(x[1]) + '</span></div>'; }).join('') + '</div>';
+    if(leads.length) html += '<div class="h2">Follow-ups</div>' + leads.map(leadRow).join('');
+    return html;
+  }
   function catalogueHtml(){
-    var cat = (S.pack && S.pack.catalogue) || {}, ch = catCh || myCh() || 'toys', items = cat[ch] || [], q = catQuery.toLowerCase();
+    var cat = (S.pack && S.pack.catalogue) || {}, chs = (S.pack && S.pack.channels && S.pack.channels.length) ? S.pack.channels : Object.keys(CH);
+    var ch = chs.indexOf(catCh) !== -1 ? catCh : (chs.indexOf(myCh()) !== -1 ? myCh() : chs[0]), items = cat[ch] || [], q = catQuery.toLowerCase();
     var shown = items.filter(function(i){ return !q || (i.name + ' ' + (i.category || '')).toLowerCase().indexOf(q) !== -1; });
     var n = Object.keys(picked).filter(function(k){ return picked[k]; }).length;
-    return '<div class="seg" style="margin-bottom:8px">' + Object.keys(CH).map(function(k){ return '<button data-cat="' + k + '" class="' + (ch === k ? 'on' : '') + '">' + CH[k].icon + ' ' + CH[k].name + '<span class="n">' + (cat[k] || []).length + '</span></button>'; }).join('') + '</div>' +
+    return (chs.length < 2 ? '' : '<div class="seg" style="margin-bottom:8px">' + chs.map(function(k){ return '<button data-cat="' + k + '" class="' + (ch === k ? 'on' : '') + '">' + CH[k].icon + ' ' + CH[k].name + '<span class="n">' + (cat[k] || []).length + '</span></button>'; }).join('') + '</div>') +
       '<input class="search" id="cq" type="search" placeholder="Search ' + esc(CH[ch].name.toLowerCase()) + '" value="' + esc(catQuery) + '" style="margin-bottom:6px">' +
       '<div class="hint" style="margin:0 4px 10px">Trade prices are for you only — sharing sends names, links and MRP. Tap items to pick.</div>' +
       (n ? '<div class="sharebar"><span>' + n + ' picked</span><button class="btn small" data-a="pick-clear">Clear</button><button class="btn primary small" data-a="share-picked">Share on WhatsApp</button></div>' : '') +
@@ -618,7 +676,7 @@
     signin.classList.add('hidden'); screen.classList.remove('hidden'); nav.classList.remove('hidden');
     document.getElementById('eyebrow').textContent = 'Thread Tribe Sales' + (myCh() ? ' · ' + CH[myCh()].name : '');
     var titles = { today: S.me.name || 'Today', leads: 'Leads', accounts: 'Accounts', catalogue: 'Catalogue', team: 'Team' };
-    document.getElementById('title').textContent = tab === 'leads' && open && lead(open) ? 'Lead' : titles[tab];
+    document.getElementById('title').textContent = tab === 'leads' && open && lead(open) ? 'Lead' : tab === 'accounts' && openAcct && account(openAcct) ? 'Account' : titles[tab];
     var ae = document.activeElement;
     if(!(ae && screen.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName))){
       screen.innerHTML = tab === 'leads' ? leadsHtml() : tab === 'accounts' ? accountsHtml() : tab === 'catalogue' ? catalogueHtml() : tab === 'team' ? teamHtml() : todayHtml();
@@ -634,10 +692,11 @@
   // ======================= events =======================
   document.addEventListener('click', async function(e){
     var nb = e.target.closest('#nav [data-tab]');
-    if(nb){ tab = nb.getAttribute('data-tab'); open = null; renderAll(); window.scrollTo(0, 0); return; }
+    if(nb){ tab = nb.getAttribute('data-tab'); open = null; openAcct = null; renderAll(); window.scrollTo(0, 0); return; }
     var sg = e.target.closest('[data-seg]'); if(sg){ stageSeg = sg.getAttribute('data-seg'); renderAll(); return; }
     var vw = e.target.closest('[data-view]'); if(vw){ store.view = vw.getAttribute('data-view'); save(); renderAll(); return; }
     var ct = e.target.closest('[data-cat]'); if(ct){ catCh = ct.getAttribute('data-cat'); renderAll(); return; }
+    var ac = e.target.closest('[data-acch]'); if(ac){ acctCh = ac.getAttribute('data-acch'); renderAll(); return; }
     if(e.target.id === 'scrim'){ closeSheet(); return; }
     var b = e.target.closest('[data-a]'); if(!b) return;
     var a = b.getAttribute('data-a'), id = b.getAttribute('data-id');
@@ -645,6 +704,8 @@
     else if(a === 'tab'){ tab = b.getAttribute('data-tab'); open = null; renderAll(); window.scrollTo(0, 0); }
     else if(a === 'lead'){ closeSheet(); tab = 'leads'; open = id; renderAll(); window.scrollTo(0, 0); loadLeadActs(id); }
     else if(a === 'back'){ open = null; renderAll(); }
+    else if(a === 'acct'){ tab = 'accounts'; openAcct = id; renderAll(); window.scrollTo(0, 0); }
+    else if(a === 'acct-back'){ openAcct = null; renderAll(); }
     else if(a === 'new-lead') leadForm(null);
     else if(a === 'edit-lead') leadForm(lead(id));
     else if(a === 'save-lead'){ b.disabled = true; await submitLead(id); b.disabled = false; }
