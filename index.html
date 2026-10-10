@@ -321,7 +321,7 @@
   function account(id){ return ((S.pack && S.pack.accounts) || []).find(function(a){ return a.id === id; }); }
   var OSTATUS = { quoted: 'Quote', booked: 'Confirmed', in_production: 'In production', production_done: 'Ready', shipped: 'Dispatched', delivered: 'Delivered', cancelled: 'Cancelled' };
   function orderCard(o, a){
-    var qty = o.lines.reduce(function(t, l){ return t + (l.qty || 0); }, 0), made = o.lines.reduce(function(t, l){ return t + (l.made || 0); }, 0);
+    var qty = o.lines.reduce(function(t, l){ return t + (l.qty || 0); }, 0), made = Math.min(qty, Math.max(o.lines.reduce(function(t, l){ return t + (l.made || 0); }, 0), o.printedGood || 0));
     var late = o.dueDate && o.dueDate < today() && ['shipped', 'delivered'].indexOf(o.status) === -1;
     var chip = o.status === 'delivered' ? 'ok' : o.status === 'shipped' ? 'ok' : late ? 'late' : o.status === 'production_done' ? 'soon' : '';
     return '<div class="card ocard"><div class="row" style="padding-top:0;border:0"><span><b>' + esc(o.displayId || 'Order') + '</b>' + (o.name ? ' · ' + esc(o.name) : '') + (a ? '<div class="hint" style="margin:0">' + esc(a.name) + '</div>' : '') + '</span><span class="chip ' + chip + '">' + esc(OSTATUS[o.status] || o.status) + (late ? ' · late' : '') + '</span></div>' +
