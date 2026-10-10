@@ -226,11 +226,11 @@
   var CLOUD_URL = CFG.supabaseUrl || 'https://aeshadnzutizlpayhtnf.supabase.co';
   var CLOUD_KEY = CFG.supabaseKey || 'sb_publishable_tunpMMqpGPgRQreweefjTA_nBO7fXId';
   var CH = {
-    toys: { name: 'Toys', who: 'Resellers, wholesalers & importers', icon: '🧸', types: ['Reseller', 'Wholesaler', 'Importer', 'Distributor', 'Retailer'],
+    toys: { name: 'Toys', who: 'Resellers, wholesalers & importers', icon: '🧸', types: ['Reseller', 'Wholesaler', 'Importer', 'Distributor', 'Retailer', 'Instagram brand store'],
       pitch: 'we make 3D-printed flexi toys and fidget clickers that sell fast with a healthy margin for resellers. Can I share our trade catalogue?' },
-    lighting: { name: 'Lighting', who: 'Lamp wholesalers & distributors', icon: '💡', types: ['Lamp wholesaler', 'Lighting distributor', 'Electrical / light shop', 'Online seller', 'Interior designer / studio'],
+    lighting: { name: 'Lighting', who: 'Lamp wholesalers & distributors', icon: '💡', types: ['Lamp wholesaler', 'Lighting distributor', 'Electrical / light shop', 'Instagram brand store', 'Online seller', 'Interior designer / studio'],
       pitch: 'we make 3D-printed designer lamps — pendant, table and wall — at trade prices that leave you a healthy margin. Can I share our wholesale catalogue and terms?' },
-    gifting: { name: 'HoReCa & gifting', who: 'Hotels, cafés & corporates', icon: '🎁', types: ['Hotel', 'Restaurant / café', 'Corporate', 'Event planner', 'Gift shop'],
+    gifting: { name: 'HoReCa & gifting', who: 'Hotels, cafés & corporates', icon: '🎁', types: ['Hotel', 'Restaurant / café', 'Corporate', 'Event planner', 'Gift shop', 'Instagram brand store'],
       pitch: 'we make custom 3D-printed décor, gifts and hampers for hotels, cafés and companies — with your branding. Can I share a few options?' }
   };
   var STAGES = [['new', 'New'], ['contacted', 'Contacted'], ['meeting', 'Meeting'], ['quote', 'Quote / sample'], ['won', 'Won'], ['lost', 'Lost']];
@@ -264,6 +264,8 @@
   function val(id){ var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
   function toast(msg){ var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('show'); }, 2600); }
   function buzz(){ try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} }
+  // Accepts @handle, a handle or an instagram.com link; keeps just the handle.
+  function igHandle(v){ v = String(v || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').split(/[/?#\s]/)[0]; return /^[A-Za-z0-9._]{1,30}$/.test(v) ? v : ''; }
   function phoneLink(p){ p = String(p || '').replace(/\D/g, ''); if(p.length === 10) p = '91' + p; return p.length >= 11 ? p : ''; }
   function stageName(k){ var s = STAGES.find(function(x){ return x[0] === k; }); return s ? s[1] : k; }
   function chName(k){ return CH[k] ? CH[k].name : 'All channels'; }
@@ -426,7 +428,7 @@
   function leadsHtml(){
     if(open && lead(open)) return leadHtml(lead(open));
     var q = leadQuery.toLowerCase();
-    var base = S.leads.filter(inView).filter(function(l){ return !q || JSON.stringify([l.data.business, l.data.contact, l.data.city, l.data.market, l.data.phone]).toLowerCase().indexOf(q) !== -1; });
+    var base = S.leads.filter(inView).filter(function(l){ return !q || JSON.stringify([l.data.business, l.data.contact, l.data.city, l.data.market, l.data.phone, l.data.instagram]).toLowerCase().indexOf(q) !== -1; });
     var counts = {}; STAGES.forEach(function(s){ counts[s[0]] = base.filter(function(l){ return l.stage === s[0]; }).length; });
     var shown = base.filter(function(l){ return stageSeg === 'open' ? OPEN.indexOf(l.stage) !== -1 : l.stage === stageSeg; })
       .sort(function(a, b){ return (a.data.nextAt || '9999').localeCompare(b.data.nextAt || '9999') || (b.updated_at || '').localeCompare(a.updated_at || ''); });
@@ -451,6 +453,7 @@
         : '<div class="note ' + (l.stage === 'won' ? 'good' : 'bad') + '">' + (l.stage === 'won' ? '🎉 Won ' + fmtDate(d.wonAt) + (d.wonValue ? ' · first order ~' + money(d.wonValue) : '') + (d.clientId ? ' · set up in Studio' : ' · Thread Tribe will set them up as a client') : 'Lost ' + fmtDate(d.lostAt) + (d.lostReason ? ' · ' + esc(d.lostReason) : '')) + '</div>') +
       '<div class="btns">' + (d.phone ? '<a class="btn small" href="tel:' + esc(String(d.phone).replace(/[^\d+]/g, '')) + '" data-a="quick-log" data-k="call" data-id="' + esc(l.id) + '">📞 Call</a>' : '') +
         (wa ? '<button class="btn small" data-a="wa" data-id="' + esc(l.id) + '">💬 WhatsApp</button>' : '') +
+        (d.instagram ? '<a class="btn small" target="_blank" rel="noopener" href="https://instagram.com/' + esc(d.instagram) + '">📸 @' + esc(d.instagram) + '</a>' : '') +
         (d.market || d.city || d.address ? '<a class="btn small" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([d.business, d.address, d.market, d.city].filter(Boolean).join(', ')) + '">🗺️ Map</a>' : '') +
         '<button class="btn small" data-a="edit-lead" data-id="' + esc(l.id) + '">Edit</button></div></div>';
     if(OPEN.indexOf(l.stage) !== -1){
@@ -497,6 +500,7 @@
       '<div class="stats" style="margin-top:12px"><div class="stat"><div class="k">Last 90 days</div><div class="v">' + money(a.value90) + '</div></div><div class="stat"><div class="k">All time</div><div class="v">' + money(a.lifetime || 0) + '</div><div class="hint">' + (a.orderCount || 0) + ' orders</div></div></div>' +
       (a.due > 0 ? '<div class="note warn" style="margin-top:0">' + money(a.due) + ' still to collect</div>' : '') +
       '<div class="btns">' + (a.phone ? '<a class="btn small" href="tel:' + esc(String(a.phone).replace(/[^\d+]/g, '')) + '">📞 Call</a>' : '') + (phoneLink(a.phone) ? '<button class="btn small" data-a="acct-wa" data-id="' + esc(a.id) + '">💬 WhatsApp</button>' : '') +
+        (igHandle(a.instagram) ? '<a class="btn small" target="_blank" rel="noopener" href="https://instagram.com/' + esc(igHandle(a.instagram)) + '">📸 Instagram</a>' : '') +
         '<button class="btn small" data-a="acct-follow" data-id="' + esc(a.id) + '">' + (leads.some(function(l){ return OPEN.indexOf(l.stage) !== -1; }) ? 'Open follow-up' : '＋ Follow-up') + '</button></div></div>';
     html += '<div class="h2">Current orders<span class="count">' + (a.orders || []).length + '</span></div>' + ((a.orders || []).length ? a.orders.map(function(o){ return orderCard(o); }).join('') : '<div class="card empty"><b>No current orders</b>' + (a.daysSince != null ? 'Last order ' + a.daysSince + ' days ago.' : '') + '</div>');
     if((a.recent || []).length) html += '<div class="h2">Recent orders</div>' + a.recent.map(function(o){ return orderCard(o); }).join('');
@@ -559,7 +563,7 @@
       '<div class="grid2"><div><label>Channel</label><select id="f-channel">' + opts(Object.keys(CH).map(function(k){ return [k, CH[k].name]; }), ch) + '</select></div><div><label>Type</label><select id="f-type">' + opts([''].concat(CH[ch].types), d.type || '') + '</select></div></div>' +
       '<div class="grid2"><div><label>Market / area</label><input id="f-market" value="' + esc(d.market || '') + '" placeholder="e.g. Sadar Bazar"></div><div><label>City</label><input id="f-city" value="' + esc(d.city || '') + '"></div></div>' +
       '<div class="grid2"><div><label>Source</label><select id="f-source">' + opts([''].concat(SOURCES), d.source || '') + '</select></div><div><label>Potential (₹ / month)</label><input id="f-potential" type="number" inputmode="numeric" min="0" value="' + esc(d.potential || '') + '"></div></div>' +
-      '<label>Email (optional)</label><input id="f-email" type="email" inputmode="email" value="' + esc(d.email || '') + '">' +
+      '<div class="grid2"><div><label>Instagram (optional)</label><input id="f-insta" autocapitalize="none" placeholder="@handle" value="' + esc(d.instagram ? '@' + d.instagram : '') + '"></div><div><label>Email (optional)</label><input id="f-email" type="email" inputmode="email" value="' + esc(d.email || '') + '"></div></div>' +
       '<label>Address (optional)</label><input id="f-address" value="' + esc(d.address || '') + '">' +
       (l ? '<label>Owner</label><select id="f-owner">' + opts(S.team.map(function(r){ return [r.email, r.name + ' · ' + (CH[r.channel] || {}).name]; }), l.owner_email) + '</select>' : '') +
       '<label>Notes</label><textarea id="f-notes" maxlength="2000" placeholder="What they sell, what they asked, who decides…">' + esc(d.notes || '') + '</textarea>' +
@@ -574,7 +578,7 @@
     var l = id ? lead(id) : null;
     var d = Object.assign({}, l ? l.data : { createdAt: new Date().toISOString(), createdBy: S.me.email }, {
       business: business.slice(0, 120), contact: contact.slice(0, 80), phone: phone.slice(0, 20), type: val('f-type'), market: val('f-market').slice(0, 80), city: val('f-city').slice(0, 60),
-      source: val('f-source'), potential: Math.max(0, Math.round(num(val('f-potential')))), email: val('f-email').slice(0, 120), address: val('f-address').slice(0, 200), notes: val('f-notes').slice(0, 2000)
+      source: val('f-source'), potential: Math.max(0, Math.round(num(val('f-potential')))), email: val('f-email').slice(0, 120), instagram: igHandle(val('f-insta')), address: val('f-address').slice(0, 200), notes: val('f-notes').slice(0, 2000)
     });
     if(!l){ d.nextAt = val('f-next'); d.nextStep = val('f-nextStep').slice(0, 120); }
     var row = { id: l ? l.id : 'ld' + uid(), channel: val('f-channel') || 'toys', stage: l ? l.stage : 'new', owner_email: l ? (val('f-owner') || l.owner_email) : S.me.email, data: d };
