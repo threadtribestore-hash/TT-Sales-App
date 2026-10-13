@@ -488,6 +488,8 @@
     }).join('') + '</div>' : '<div class="card empty"><b>No activity yet</b>Log calls, visits and samples here so the whole team sees the story.</div>');
     return html;
   }
+  // A, B or C from Studio: A = biggest accounts by the last 180 days.
+  function tierBadge(a){ return a.tier ? '<span class="chip" style="margin-right:6px;font-weight:700' + (a.tier === 'A' ? ';background:var(--accent);color:var(--accent-ink)' : '') + '">' + esc(a.tier) + '</span>' : ''; }
   function accountsHtml(){
     if(openAcct && account(openAcct)) return accountHtml(account(openAcct));
     var all = (S.pack && S.pack.accounts) || [], q = acctQuery.toLowerCase(), chs = (S.pack && S.pack.channels) || [];
@@ -500,9 +502,10 @@
       '<input class="search" id="aq" type="search" placeholder="Search accounts" value="' + esc(acctQuery) + '" style="margin-bottom:10px">' +
       (list.length ? list.map(function(a){
         var quiet = a.daysSince != null && a.daysSince >= 45;
-        return '<div class="card" style="padding:12px 14px"><div class="row" style="padding:0;border:0;cursor:pointer" data-a="acct" data-id="' + esc(a.id) + '"><span><b>' + esc(a.name) + ' ›</b><div class="hint" style="margin:0">' + esc([a.type, a.city, CH[a.channel] ? CH[a.channel].icon + ' ' + CH[a.channel].name : ''].filter(Boolean).join(' · ')) + (a.buyerApp ? ' · uses TT Trade' : '') + '</div></span>' +
+        return '<div class="card" style="padding:12px 14px"><div class="row" style="padding:0;border:0;cursor:pointer" data-a="acct" data-id="' + esc(a.id) + '"><span>' + tierBadge(a) + '<b>' + esc(a.name) + ' ›</b><div class="hint" style="margin:0">' + esc([a.type, a.city, CH[a.channel] ? CH[a.channel].icon + ' ' + CH[a.channel].name : ''].filter(Boolean).join(' · ')) + (a.buyerApp ? ' · uses TT Trade' : '') + '</div></span>' +
           '<span class="r" style="text-align:right">' + money(a.value90) + '<div class="hint" style="margin:0">90 days</div></span></div>' +
           '<div class="hint">' + (a.lastOrder ? 'Last order ' + fmtDate(a.lastOrder) + ' · ' + a.daysSince + ' days ago' : 'No orders yet') + (quiet ? ' · <span style="color:var(--amber);font-weight:600">gone quiet</span>' : '') + (a.openOrders ? ' · <b style="color:var(--accent)">' + a.openOrders + ' current order' + (a.openOrders === 1 ? '' : 's') + '</b>' : '') + (a.due > 0 ? ' · <span style="color:var(--amber)">' + money(a.due) + ' due</span>' : '') + '</div>' +
+          ((a.pitch || []).length ? '<div class="hint" style="margin-top:4px">Pitch next: <b style="color:var(--text)">' + esc(a.pitch[0]) + '</b></div>' : '') +
           '<div class="btns" style="margin-top:8px">' + (a.phone ? '<a class="btn small" href="tel:' + esc(String(a.phone).replace(/[^\d+]/g, '')) + '">📞 Call</a>' : '') + (phoneLink(a.phone) ? '<button class="btn small" data-a="acct-wa" data-id="' + esc(a.id) + '">💬 Check in</button>' : '') +
           '<button class="btn small" data-a="acct-follow" data-id="' + esc(a.id) + '">' + (S.leads.some(function(l){ return l.data.clientId === a.id && OPEN.indexOf(l.stage) !== -1; }) ? 'Open follow-up' : '＋ Follow-up') + '</button></div></div>';
       }).join('') : '<div class="card empty"><b>No accounts</b>' + (q ? 'Try another search.' : 'Won leads appear here once Thread Tribe sets them up.') + '</div>');
@@ -517,6 +520,7 @@
       '<div class="btns">' + (a.phone ? '<a class="btn small" href="tel:' + esc(String(a.phone).replace(/[^\d+]/g, '')) + '">📞 Call</a>' : '') + (phoneLink(a.phone) ? '<button class="btn small" data-a="acct-wa" data-id="' + esc(a.id) + '">💬 WhatsApp</button>' : '') +
         (igHandle(a.instagram) ? '<a class="btn small" target="_blank" rel="noopener" href="https://instagram.com/' + esc(igHandle(a.instagram)) + '">📸 Instagram</a>' : '') +
         '<button class="btn small" data-a="acct-follow" data-id="' + esc(a.id) + '">' + (leads.some(function(l){ return OPEN.indexOf(l.stage) !== -1; }) ? 'Open follow-up' : '＋ Follow-up') + '</button></div></div>';
+    if((a.pitch || []).length) html += '<div class="h2">What to pitch next</div><div class="card">' + a.pitch.map(function(p){ return '<div class="row"><span>💡 ' + esc(p) + '</span></div>'; }).join('') + '<div class="hint">From what this client usually orders and what similar clients buy.</div></div>';
     html += '<div class="h2">Current orders<span class="count">' + (a.orders || []).length + '</span></div>' + ((a.orders || []).length ? a.orders.map(function(o){ return orderCard(o); }).join('') : '<div class="card empty"><b>No current orders</b>' + (a.daysSince != null ? 'Last order ' + a.daysSince + ' days ago.' : '') + '</div>');
     if((a.recent || []).length) html += '<div class="h2">Recent orders</div>' + a.recent.map(function(o){ return orderCard(o); }).join('');
     if(info.length) html += '<div class="h2">Details</div><div class="card">' + info.map(function(x){ return '<div class="row"><span class="muted">' + x[0] + '</span><span class="r" style="font-weight:500;white-space:normal;text-align:right">' + esc(x[1]) + '</span></div>'; }).join('') + '</div>';
