@@ -291,9 +291,12 @@
     var res = await Promise.all([
       sb.from('sales_leads').select('id,channel,stage,owner_email,data,updated_at').order('updated_at', { ascending: false }).limit(5000),
       sb.from('sales_activities').select('id,lead_id,kind,author_email,data,created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(5000),
-      sb.from('sales_pack').select('id,pack,updated_at')
+      sb.from('sales_pack').select('id,pack,updated_at'),
+      // Tasks from Studio's team board that are given to this person (missing table = no tasks).
+      sb.from('team_tasks').select('id,status,due,data').eq('assignee_email', store.email).neq('status', 'done').limit(200)
     ]);
     S.leads = res[0].data || []; S.acts = res[1].data || []; S.pack = composePack(res[2].data || []);
+    S.tasks = res[3].error ? [] : (res[3].data || []);
     S.loaded = true;
     if(!rt){
       try{
@@ -405,10 +408,22 @@
       '<span class="s" style="display:block">' + esc([d.contact && d.business ? d.contact : '', d.market || d.city, (CH[l.channel] || {}).icon + ' ' + stageName(l.stage)].filter(Boolean).join(' · ')) + '</span>' +
       (d.nextStep && OPEN.indexOf(l.stage) !== -1 ? '<span class="s" style="display:block">Next: ' + esc(d.nextStep) + '</span>' : '') + '</span>' + chip + '<span class="chev">›</span></button>';
   }
+  // Tasks the team board (Studio) gives this person: late and today first.
+  function tasksHtml(){
+    var list = (S.tasks || []).slice().sort(function(a, b){ return (a.due || '9999').localeCompare(b.due || '9999'); });
+    if(!list.length) return '';
+    return '<div class="h2">My tasks<span class="count">' + list.length + '</span></div><div class="card">' + list.slice(0, 8).map(function(t){
+      var d = t.data || {}, du = daysUntil(t.due);
+      return '<div class="row"><span><button class="btn" style="padding:4px 10px;margin-right:8px" data-a="task-done" data-id="' + esc(t.id) + '">✓</button>' + esc(d.title || 'Task') +
+        (d.notes ? '<div class="hint" style="margin:2px 0 0 42px">' + esc(String(d.notes).slice(0, 120)) + '</div>' : '') + '</span>' +
+        (du == null ? '' : '<span class="chip ' + (du < 0 ? 'late' : du === 0 ? 'soon' : '') + '">' + (du < 0 ? (-du) + 'd late' : du === 0 ? 'today' : fmtDate(t.due)) + '</span>') + '</div>';
+    }).join('') + '</div>';
+  }
   function todayHtml(){
     var me = S.me, ch = myCh(), k = kpis(me.admin ? '' : me.email, ch), due = dueLeads(me.admin ? '' : me.email);
     var html = '<div class="hello">' + greeting() + ', ' + esc(firstName(me.name)) + ' · ' + (ch ? CH[ch].icon + ' ' + CH[ch].name : 'all channels') + '</div>' + kpiCards(k, targets(ch));
     html += '<div class="qa"><button class="btn primary" data-a="new-lead">＋ New lead</button><button class="btn" data-a="pick-lead">📍 Log a visit</button><button class="btn" data-a="tab" data-tab="catalogue">📒 Catalogue</button></div>';
+    html += tasksHtml();
     html += '<div class="h2">Follow-ups due<span class="count">' + due.length + '</span></div>' + (due.length ? due.slice(0, 12).map(leadRow).join('') : '<div class="card empty"><b>All caught up ✓</b>Set a next follow-up on every lead and it shows here on the day.</div>');
     var loose = S.leads.filter(function(l){ return OPEN.indexOf(l.stage) !== -1 && (me.admin || l.owner_email === me.email) && !l.data.nextAt; });
     if(loose.length) html += '<div class="act warn" data-a="tab" data-tab="leads" style="cursor:pointer"><div class="ic">⏳</div><div class="body"><div class="t">' + loose.length + ' open lead' + (loose.length === 1 ? '' : 's') + ' with no next step</div><div class="s">Give each one a follow-up date so nothing goes cold.</div></div></div>';
@@ -708,6 +723,12 @@
     else if(a === 'tab'){ tab = b.getAttribute('data-tab'); open = null; renderAll(); window.scrollTo(0, 0); }
     else if(a === 'lead'){ closeSheet(); tab = 'leads'; open = id; renderAll(); window.scrollTo(0, 0); loadLeadActs(id); }
     else if(a === 'back'){ open = null; renderAll(); }
+    else if(a === 'task-done'){
+      var t = (S.tasks || []).find(function(x){ return x.id === id; }); if(!t) return;
+      var r = await sb.from('team_tasks').update({ status: 'done', data: Object.assign({}, t.data, { done_at: new Date().toISOString() }) }).eq('id', id);
+      if(r.error){ toast(friendlyErr(r.error)); return; }
+      S.tasks = S.tasks.filter(function(x){ return x.id !== id; }); buzz(); toast('Done ✓'); renderAll();
+    }
     else if(a === 'acct'){ tab = 'accounts'; openAcct = id; renderAll(); window.scrollTo(0, 0); }
     else if(a === 'acct-back'){ openAcct = null; renderAll(); }
     else if(a === 'new-lead') leadForm(null);
