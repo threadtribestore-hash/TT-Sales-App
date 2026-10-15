@@ -196,6 +196,14 @@
   .ocard{ padding:12px 14px; } .ocard .bar{ margin-top:6px; } .ometa{ font-size:12.5px; color:var(--dim); margin-top:4px; }
   .seg{ flex-wrap:nowrap; }
   @media (min-width:900px){ .wrap{ max-width:760px; } }
+
+  /* Thread Tribe logo: the logomark beside the page title, the full lockup above sign-in.
+     Drawn as a mask so it takes the theme's text colour in light and dark mode. */
+  .top-left{ position:relative; padding-left:50px; }
+  .top-left::before{ content:""; position:absolute; left:0; top:50%; width:40px; height:24px; transform:translateY(-50%);
+    background:var(--text); -webkit-mask:url(brand/tt-logomark.svg) center/contain no-repeat; mask:url(brand/tt-logomark.svg) center/contain no-repeat; }
+  #signin:not(.hidden)::before{ content:""; display:block; width:170px; height:98px; margin:28px auto -8px;
+    background:var(--text); -webkit-mask:url(brand/tt-lockup.svg) center/contain no-repeat; mask:url(brand/tt-lockup.svg) center/contain no-repeat; }
 </style>
 </head>
 <body>
