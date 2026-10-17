@@ -263,6 +263,8 @@
 
   var store = { email: '', view: 'mine', chFilter: '' };
   var sb = null, session = null, rt = null;
+  // For notify-app.js (the 🔔 inbox and phone alerts).
+  window.TTApp = { sb: function(){ return session ? sb : null; }, email: function(){ return session && session.user ? session.user.email : ''; } };
   var S = { me: null, team: [], leads: [], acts: [], pack: null, missing: false, notOnTeam: false, loaded: false, leadActs: {} };
   var cloud = { otpEmail: '', err: '', booting: true };
   var openAcct = null, acctCh = '';
@@ -975,5 +977,7 @@
   init();
 })();
 </script>
+<script>window.TT_NOTIFY = { app: 'sales', mount: '#top' };</script>
+<script src="notify-app.js?v=1"></script>
 </body>
 </html>
